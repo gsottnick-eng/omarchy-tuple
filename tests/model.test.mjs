@@ -395,3 +395,22 @@ test("strips daemon log lines that carry a source location", () => {
   const raw = "19:48:23.767|350698|350696|info|Engine.cpp:589|cli: ls\nnot logged in\n"
   assert.equal(Model.stripDaemonLog(raw), "not logged in\n")
 })
+
+test("reads booleans that arrive as strings from `omarchy bar set`", () => {
+  // Without --json the CLI quotes the value, so a setting the user turned on
+  // reaches the plugin as "true". Treating that as false turns the feature
+  // off exactly when it was asked for.
+  for (const yes of [true, "true", "True", " on ", "1", "yes"]) {
+    assert.equal(Model.toBool(yes, false), true, `${JSON.stringify(yes)} should be true`)
+  }
+  for (const no of [false, "false", "off", "0", "no", ""]) {
+    assert.equal(Model.toBool(no, true), false, `${JSON.stringify(no)} should be false`)
+  }
+})
+
+test("falls back when a boolean setting is missing or nonsense", () => {
+  assert.equal(Model.toBool(undefined, true), true)
+  assert.equal(Model.toBool(null, false), false)
+  assert.equal(Model.toBool("banana", true), true)
+  assert.equal(Model.toBool("banana", false), false)
+})

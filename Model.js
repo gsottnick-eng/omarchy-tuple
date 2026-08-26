@@ -648,6 +648,20 @@ function presenceGlyphColorKey(state) {
   return "ready"
 }
 
+// A plugin setting can arrive as a real boolean -- from Omarchy's settings UI,
+// or `omarchy bar set <id> <key> <value> --json` -- or as a string, because
+// `omarchy bar set` without --json quotes everything it writes. Comparing with
+// `=== true` then fails on "true", which is worse than useless: it turns the
+// setting off at the moment the user asked for it on.
+function toBool(value, fallback) {
+  if (value === true || value === false) return value
+  if (value === undefined || value === null) return fallback === true
+  var text = String(value).trim().toLowerCase()
+  if (text === "true" || text === "1" || text === "yes" || text === "on") return true
+  if (text === "false" || text === "0" || text === "no" || text === "off" || text === "") return false
+  return fallback === true
+}
+
 function clampInt(value, fallback, min, max) {
   var n = parseInt(String(value), 10)
   if (!isFinite(n)) n = fallback

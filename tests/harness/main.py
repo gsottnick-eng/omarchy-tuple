@@ -140,6 +140,7 @@ def snapshot(plugin: QObject, service: QObject, bar: QObject) -> dict:
             "focusSection": prop(plugin, "focusSection", ""),
             "roomIndex": prop(plugin, "roomIndex", 0),
             "barLabel": prop(plugin, "barLabel", ""),
+            "barText": prop(plugin, "barText", ""),
         },
         "pluginSettings": prop(plugin, "settings", {}),
         "bar": {

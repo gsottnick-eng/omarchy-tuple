@@ -328,6 +328,17 @@ class PanelTest(unittest.TestCase):
         self.assertTrue(state["installed"])
         self.assertRegex(state["clientVersion"], r"^v\d{4}_\d{2}_\d{2}")
 
+    def test_a_boolean_setting_written_as_a_string_still_takes_effect(self):
+        # `omarchy bar set <id> showLabel true` writes the string "true", not a
+        # boolean. Reading it with `=== true` turned the feature off at the
+        # moment the user asked for it on.
+        off = self.harness(logged_in=True, settings={"showLabel": "false"}).run()
+        self.assertEqual(off["panel"]["barLabel"], "Tuple")
+        self.assertEqual(off["panel"]["barText"], "")
+
+        on = self.harness(logged_in=True, settings={"showLabel": "true"}).run()
+        self.assertEqual(on["panel"]["barText"], on["panel"]["barLabel"])
+
     # ----------------------------------------------------------------- audio
 
     def test_audio_devices_come_from_pipewire_not_the_client(self):

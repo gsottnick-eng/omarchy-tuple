@@ -68,6 +68,10 @@ Panel {
     return "Tuple"
   }
 
+  // What the bar actually shows: barLabel when the setting is on, nothing
+  // otherwise. Named so a test can assert on it rather than on a Text item.
+  readonly property string barText: Model.toBool(setting("showLabel", false), false) ? barLabel : ""
+
   // -------------------------------------------------------------- helpers
 
   function sectionOrder() {
@@ -241,7 +245,7 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.setting("showLabel", false) === true ? root.barLabel : ""
+    text: root.barText
     tooltipText: "Tuple — " + tuple.statusSummary
     iconComponent: Component {
       Item {

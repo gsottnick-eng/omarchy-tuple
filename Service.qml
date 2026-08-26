@@ -90,7 +90,7 @@ Item {
     || pickerProcess.running
 
   readonly property int refreshIntervalSec: Model.clampInt(setting("refreshIntervalSec", 20), 20, 5, 600)
-  readonly property bool callAlerts: setting("callAlerts", true) === true
+  readonly property bool callAlerts: Model.toBool(setting("callAlerts", true), true)
   readonly property string installDir: String(setting("installDir", "~/.local/bin"))
   readonly property string logPath: {
     var dataHome = Quickshell.env("XDG_DATA_HOME")
