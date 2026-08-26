@@ -11,8 +11,8 @@ import "Model.js" as Model
 // hop into a room, and reach every client setting from one dropdown.
 Panel {
   id: root
-  moduleName: "io.github.gavinsottnick.tuple"
-  ipcTarget: "io.github.gavinsottnick.tuple"
+  moduleName: "io.github.gsottnick-eng.tuple"
+  ipcTarget: "io.github.gsottnick-eng.tuple"
   manageIpc: false
 
   // ------------------------------------------------------------ appearance
