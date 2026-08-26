@@ -655,3 +655,64 @@ function clampInt(value, fallback, min, max) {
   if (n > max) n = max
   return n
 }
+
+// ------------------------------------------------------------------- audio
+
+// Tuple's Linux client exposes no audio settings at all -- its whole surface
+// is the five in `tuple settings` -- so device choice has to come from
+// PipeWire instead. `pactl -f json list sinks|sources` is the one machine
+// readable form available without adding a dependency.
+function parseAudioDevices(raw, kind) {
+  var list
+  try {
+    list = JSON.parse(String(raw || ""))
+  } catch (e) {
+    return []
+  }
+  if (!Array.isArray(list)) return []
+  var out = []
+  for (var i = 0; i < list.length; i++) {
+    var device = list[i]
+    if (!device || typeof device.name !== "string" || device.name === "") continue
+    // Every sink has a matching ".monitor" source that loops its output back.
+    // Nobody choosing a microphone means one of those.
+    if (kind === "source" && device.monitor_source) continue
+    out.push({
+      name: device.name,
+      label: String(device.description || device.name)
+    })
+  }
+  out.sort(function (a, b) { return a.label.localeCompare(b.label) })
+  return out
+}
+
+// `pactl get-default-sink` answers with the bare name and nothing else, but
+// the daemon can still interleave a blank line or a warning.
+function parseDefaultDevice(raw) {
+  var lines = String(raw || "").split("\n")
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim()
+    if (line !== "" && line.indexOf(" ") === -1) return line
+  }
+  return ""
+}
+
+// `pactl get-default-sink; pactl get-default-source` run back to back, so the
+// answer is two bare names in order.
+function parseDefaultPair(raw) {
+  var lines = String(raw || "").split("\n")
+  var names = []
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim()
+    if (line !== "" && line.indexOf(" ") === -1) names.push(line)
+  }
+  return { sink: names.length > 0 ? names[0] : "", source: names.length > 1 ? names[1] : "" }
+}
+
+function activeDeviceLabel(devices, name) {
+  var list = toArray(devices)
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].name === name) return list[i].label
+  }
+  return ""
+}

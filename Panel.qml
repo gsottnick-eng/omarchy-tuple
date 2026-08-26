@@ -52,6 +52,7 @@ Panel {
   readonly property bool showRooms: tuple.installed && tuple.loggedIn
   readonly property bool showPeople: tuple.installed && tuple.loggedIn
   readonly property bool showSettings: tuple.installed && settingsOpen && clientSettings.length > 0
+  readonly property bool showAudio: tuple.installed && tuple.audioAvailable
 
   readonly property string heroTitle: {
     if (!tuple.installed) return "Tuple"
@@ -72,9 +73,11 @@ Panel {
   function sectionOrder() {
     var order = ["header"]
     if (showCall) order.push("call")
+    // Settings sits directly under the header: it is the first thing wanted
+    // after installing, and burying it under contacts made it hard to find.
+    if (showSettings) order.push("settings")
     if (showRooms) order.push("rooms")
     if (showPeople && people.length > 0) order.push("people")
-    if (showSettings) order.push("settings")
     return order
   }
 
@@ -287,6 +290,8 @@ Panel {
         else if (key === "s" && tuple.inCall) tuple.toggleShare()
         else if (key === "e" && tuple.inCall) tuple.endCall()
         else if (key === "n" && tuple.loggedIn) tuple.newCall()
+        else if (key === "o") tuple.cycleAudioOutput()
+        else if (key === "i") tuple.cycleAudioInput()
         else if (key === "r") tuple.refresh()
         else if (key === ",") root.settingsOpen = !root.settingsOpen
         else if (key === "a" && root.showRooms) root.addRoomOpen = !root.addRoomOpen
@@ -565,6 +570,94 @@ Panel {
             }
           }
 
+          // ------------------------------------------------------ settings
+          PanelSeparator { visible: tuple.installed; foreground: root.foreground }
+
+          Column {
+            visible: tuple.installed
+            width: parent.width
+            spacing: Style.space(8)
+
+            Item {
+              width: parent.width
+              implicitHeight: Math.max(settingsHeading.implicitHeight, settingsToggle.implicitHeight)
+
+              PanelSectionHeader {
+                id: settingsHeading
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: "SETTINGS"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+              }
+
+              PanelActionButton {
+                id: settingsToggle
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                iconText: root.settingsOpen ? "󰅁" : "󰅂"
+                tooltipText: root.settingsOpen ? "Hide settings (,)" : "Show settings (,)"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: root.settingsOpen = !root.settingsOpen
+              }
+            }
+
+            Column {
+              id: settingColumn
+              visible: root.showSettings
+              width: parent.width
+              spacing: Style.space(6)
+
+              Repeater {
+                model: root.clientSettings
+                SettingRow {
+                  required property var modelData
+                  required property int index
+                  width: settingColumn.width
+                  entry: modelData
+                  rowIndex: index
+                }
+              }
+            }
+          }
+
+          // --------------------------------------------------------- audio
+          // Tuple's client cannot choose a microphone or speaker, so this is
+          // PipeWire's default device rather than a per-call route. Hidden
+          // entirely when pactl is not present.
+          PanelSeparator { visible: root.showAudio; foreground: root.foreground }
+
+          Column {
+            visible: root.showAudio
+            width: parent.width
+            spacing: Style.space(6)
+
+            PanelSectionHeader {
+              text: "AUDIO"
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+            }
+
+            AudioRow {
+              width: parent.width
+              caption: "Output"
+              deviceLabel: Model.activeDeviceLabel(tuple.audioOutputs, tuple.audioOutput)
+              count: tuple.audioOutputs.length
+              shortcutHint: "o"
+              onActivated: tuple.cycleAudioOutput()
+            }
+
+            AudioRow {
+              width: parent.width
+              caption: "Microphone"
+              deviceLabel: Model.activeDeviceLabel(tuple.audioInputs, tuple.audioInput)
+              count: tuple.audioInputs.length
+              shortcutHint: "i"
+              onActivated: tuple.cycleAudioInput()
+            }
+          }
+
           // --------------------------------------------------------- rooms
           PanelSeparator { visible: root.showRooms; foreground: root.foreground }
 
@@ -715,58 +808,6 @@ Panel {
                   required property int index
                   width: peopleColumn.width
                   person: modelData
-                  rowIndex: index
-                }
-              }
-            }
-          }
-
-          // ------------------------------------------------------ settings
-          PanelSeparator { visible: tuple.installed; foreground: root.foreground }
-
-          Column {
-            visible: tuple.installed
-            width: parent.width
-            spacing: Style.space(8)
-
-            Item {
-              width: parent.width
-              implicitHeight: Math.max(settingsHeading.implicitHeight, settingsToggle.implicitHeight)
-
-              PanelSectionHeader {
-                id: settingsHeading
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                text: "SETTINGS"
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-              }
-
-              PanelActionButton {
-                id: settingsToggle
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                iconText: root.settingsOpen ? "󰅁" : "󰅂"
-                tooltipText: root.settingsOpen ? "Hide settings (,)" : "Show settings (,)"
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                onClicked: root.settingsOpen = !root.settingsOpen
-              }
-            }
-
-            Column {
-              id: settingColumn
-              visible: root.showSettings
-              width: parent.width
-              spacing: Style.space(6)
-
-              Repeater {
-                model: root.clientSettings
-                SettingRow {
-                  required property var modelData
-                  required property int index
-                  width: settingColumn.width
-                  entry: modelData
                   rowIndex: index
                 }
               }
@@ -1006,6 +1047,68 @@ Panel {
         fontFamily: root.fontFamily
         Layout.alignment: Qt.AlignVCenter
         onClicked: tuple.callContact(personRow.person)
+      }
+    }
+  }
+
+  component AudioRow: CursorSurface {
+    id: audioRow
+    property string caption: ""
+    property string deviceLabel: ""
+    property int count: 0
+    property string shortcutHint: ""
+    signal activated()
+
+    hasCursor: false
+    foreground: root.foreground
+    fill: root.hoverFill
+    implicitHeight: audioInner.implicitHeight + Style.spacing.rowPaddingX
+
+    MouseArea {
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: audioRow.count > 1 ? Qt.PointingHandCursor : Qt.ArrowCursor
+      onClicked: if (audioRow.count > 1) audioRow.activated()
+    }
+
+    RowLayout {
+      id: audioInner
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      anchors.leftMargin: Style.space(10)
+      anchors.rightMargin: Style.space(8)
+      spacing: Style.space(8)
+
+      ColumnLayout {
+        Layout.fillWidth: true
+        spacing: Style.space(1)
+
+        Text {
+          Layout.fillWidth: true
+          text: audioRow.caption
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+          elide: Text.ElideRight
+        }
+
+        Text {
+          Layout.fillWidth: true
+          text: audioRow.deviceLabel !== "" ? audioRow.deviceLabel : "No device"
+          color: root.dim
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          elide: Text.ElideRight
+        }
+      }
+
+      Text {
+        visible: audioRow.count > 1
+        text: audioRow.shortcutHint
+        color: root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
       }
     }
   }

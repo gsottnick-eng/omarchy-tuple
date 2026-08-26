@@ -22,7 +22,8 @@
       "refreshIntervalSec": 20,
       "installDir": "~/.local/bin",
       "showLabel": false,
-      "savedRooms": []
+      "savedRooms": [],
+      "callAlerts": true
     },
     "schema": [
       {
@@ -45,6 +46,12 @@
         "type": "boolean",
         "label": "Show status text next to the bar icon",
         "defaultValue": false
+      },
+      {
+        "key": "callAlerts",
+        "type": "boolean",
+        "label": "Notify and play a sound when a call starts or ends",
+        "defaultValue": true
       }
     ]
   }

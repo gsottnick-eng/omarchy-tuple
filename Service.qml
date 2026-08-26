@@ -34,6 +34,22 @@ Item {
   // ---------------------------------------------------------- call
   property bool inCall: false
   property bool sharing: false
+
+  // Tuple's Linux client says nothing when a call begins or ends -- no sound,
+  // no notification, nothing outside its own log. On the desktop apps that
+  // feedback is the main way you know the call connected, so synthesise it
+  // from the state the panel already infers.
+  onInCallChanged: announceCall(inCall)
+
+  // ---------------------------------------------------------------- audio
+  // The client has no audio settings of its own, so device choice comes from
+  // PipeWire via pactl. Absent pactl these stay empty and the panel hides the
+  // section rather than showing controls that cannot work.
+  property var audioOutputs: []
+  property var audioInputs: []
+  property string audioOutput: ""
+  property string audioInput: ""
+  readonly property bool audioAvailable: audioOutputs.length > 0 || audioInputs.length > 0
   property bool muted: false
 
   // ---------------------------------------------------------- data
@@ -51,6 +67,10 @@ Item {
 
   // ---------------------------------------------------------- feedback
   property string actionStatus: ""
+  // True while actionStatus holds a progress() message. Such a message stays
+  // until something replaces it: a command's own "ok" response must not
+  // re-arm the expiry timer and erase the very thing it was reporting on.
+  property bool statusHeld: false
   property string lastError: ""
   property bool refreshing: false
   property bool installing: false
@@ -70,6 +90,7 @@ Item {
     || pickerProcess.running
 
   readonly property int refreshIntervalSec: Model.clampInt(setting("refreshIntervalSec", 20), 20, 5, 600)
+  readonly property bool callAlerts: setting("callAlerts", true) === true
   readonly property string installDir: String(setting("installDir", "~/.local/bin"))
   readonly property string logPath: {
     var dataHome = Quickshell.env("XDG_DATA_HOME")
@@ -102,6 +123,7 @@ Item {
   }
 
   function note(message) {
+    statusHeld = false
     actionStatus = Model.elide(message)
     if (actionStatus !== "") statusTimer.restart()
   }
@@ -112,15 +134,18 @@ Item {
   // when it fires it would wipe this message right after it appeared.
   function progress(message) {
     statusTimer.stop()
+    statusHeld = true
     actionStatus = Model.elide(message)
   }
 
   function reportError(message) {
+    statusHeld = false
     lastError = Model.elide(message)
     actionStatus = ""
   }
 
   function clearFeedback() {
+    statusHeld = false
     lastError = ""
     actionStatus = ""
   }
@@ -155,6 +180,18 @@ Item {
     if (!logProcess.running) {
       logProcess.command = ["sh", "-c", '[ -r "$1" ] && tail -n 300 "$1" || true', "sh", logPath]
       logProcess.running = true
+    }
+    if (!audioSinksProcess.running) {
+      audioSinksProcess.command = ["pactl", "-f", "json", "list", "sinks"]
+      audioSinksProcess.running = true
+    }
+    if (!audioSourcesProcess.running) {
+      audioSourcesProcess.command = ["pactl", "-f", "json", "list", "sources"]
+      audioSourcesProcess.running = true
+    }
+    if (!audioDefaultsProcess.running) {
+      audioDefaultsProcess.command = ["sh", "-c", "pactl get-default-sink; pactl get-default-source"]
+      audioDefaultsProcess.running = true
     }
     if (!daemonProcess.running) {
       daemonProcess.command = ["sh", "-c", "cat /proc/net/unix 2>/dev/null || true"]
@@ -389,7 +426,7 @@ Item {
     // The label the action already set reads better than echoing that back.
     if (response.kind === "ok" || response.kind === "empty") {
       if (actionStatus === "") note(response.message)
-      else statusTimer.restart()
+      else if (!statusHeld) statusTimer.restart()
       return
     }
     if (response.message !== "") note(response.message)
@@ -614,5 +651,84 @@ Item {
     if (event.version !== "") clientVersion = event.version
     if (event.stage === "error") reportError(installMessage)
     else if (event.stage === "done") note(installMessage)
+  }
+
+  // ---------------------------------------------------------------- audio
+
+  function setAudioOutput(name) {
+    if (!name || audioSetProcess.running) return
+    progress("Switching output…")
+    audioSetProcess.command = ["pactl", "set-default-sink", String(name)]
+    audioSetProcess.running = true
+  }
+
+  function setAudioInput(name) {
+    if (!name || audioSetProcess.running) return
+    progress("Switching microphone…")
+    audioSetProcess.command = ["pactl", "set-default-source", String(name)]
+    audioSetProcess.running = true
+  }
+
+  function cycleAudioOutput() {
+    audioOutput = _nextDevice(audioOutputs, audioOutput)
+    setAudioOutput(audioOutput)
+  }
+
+  function cycleAudioInput() {
+    audioInput = _nextDevice(audioInputs, audioInput)
+    setAudioInput(audioInput)
+  }
+
+  function _nextDevice(devices, current) {
+    var list = Model.toArray(devices)
+    if (list.length === 0) return ""
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].name === current) return list[(i + 1) % list.length].name
+    }
+    return list[0].name
+  }
+
+  function announceCall(active) {
+    if (!callAlerts) return
+    var title = active ? "Call started" : "Call ended"
+    Quickshell.execDetached(["notify-send", "-a", "Tuple", "-i", "call-start", title, statusSummary])
+    var sound = active ? "message-new-instant.oga" : "complete.oga"
+    Quickshell.execDetached(["sh", "-c",
+      'f="$1"; [ -r "$f" ] || exit 0; command -v canberra-gtk-play >/dev/null 2>&1 ' +
+      '&& exec canberra-gtk-play -f "$f" || exec paplay "$f"',
+      "sh", "/usr/share/omarchy/default/sounds/" + sound])
+  }
+
+  Process {
+    id: audioSinksProcess
+    stdout: StdioCollector { id: audioSinksOut; waitForEnd: true }
+    onExited: root.audioOutputs = Model.parseAudioDevices(String(audioSinksOut.text || ""), "sink")
+  }
+
+  Process {
+    id: audioSourcesProcess
+    stdout: StdioCollector { id: audioSourcesOut; waitForEnd: true }
+    onExited: root.audioInputs = Model.parseAudioDevices(String(audioSourcesOut.text || ""), "source")
+  }
+
+  Process {
+    id: audioDefaultsProcess
+    stdout: StdioCollector { id: audioDefaultsOut; waitForEnd: true }
+    onExited: {
+      var pair = Model.parseDefaultPair(String(audioDefaultsOut.text || ""))
+      root.audioOutput = pair.sink
+      root.audioInput = pair.source
+    }
+  }
+
+  Process {
+    id: audioSetProcess
+    stdout: StdioCollector { id: audioSetOut; waitForEnd: true }
+    stderr: StdioCollector { id: audioSetErr; waitForEnd: true }
+    onExited: function(exitCode) {
+      if (exitCode !== 0) root.reportError("Could not change the audio device.")
+      else root.note("Audio device changed")
+      settleTimer.restart()
+    }
   }
 }
