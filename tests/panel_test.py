@@ -395,6 +395,22 @@ class PanelTest(unittest.TestCase):
         self.assertEqual(state["audioOutputs"], [])
         self.assertFalse(state["panel"]["showAudio"])
 
+    def test_stopping_tuple_stays_stopped(self):
+        # daemonRunning is read from the real /proc/net/unix regardless of
+        # fake/real mode, so this bug can only be reproduced against the real
+        # client. Every `tuple` subcommand revives a stopped daemon as a side
+        # effect (HANDOFF.md), and refreshData()'s own background polls used
+        # to do exactly that a few seconds after every "Stop Tuple" click --
+        # this is what a user saw as the toggle silently undoing itself.
+        if not real_client():
+            self.skipTest("official Tuple client not installed")
+        # The daemon's abstract socket is shared system-wide, not namespaced
+        # per XDG_DATA_HOME, so make sure it's running before the test starts.
+        subprocess.run([real_client(), "on"], capture_output=True, timeout=15)
+        harness = self.harness(fake=False)
+        state = harness.run(["daemon-toggle", "wait:1500", "wait:8000", "wait:8000"], settle=1800)
+        self.assertFalse(state["daemonRunning"])
+
     # ----------------------------------------------------------- real client
 
     def test_real_client_is_detected_and_its_settings_are_understood(self):
