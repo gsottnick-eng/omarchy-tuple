@@ -20,7 +20,16 @@ client's own settings, all from the bar.
   right-click the bar icon to toggle mute without opening the panel.
 - **Client settings** — every setting the Tuple client exposes, each rendered
   with the control its allowed values imply: a switch for on/off settings, a
-  cycle button for enumerated ones, a text field for the rest.
+  cycle button for enumerated ones, a text field for the rest. Settings sit
+  directly below the header, since they are the first thing wanted after
+  installing.
+- **Audio devices** — pick the output and microphone without leaving the
+  panel. Tuple's Linux client has no audio settings of its own, so this
+  changes PipeWire's default device, via `pactl`. The section hides itself if
+  `pactl` is not installed.
+- **Call alerts** — a desktop notification and a sound when a call starts or
+  ends. The Linux client is silent about both, which makes it easy to miss
+  that a call connected. Turn it off in the plugin's settings.
 - **Sign in and out** — the device-code login flow, without the terminal.
 
 ### Keyboard
@@ -34,6 +43,8 @@ With the panel open:
 | `s` | Toggle screen sharing (in a call) |
 | `e` | End the call |
 | `a` | Add a room |
+| `o` | Switch audio output |
+| `i` | Switch microphone |
 | `r` | Refresh |
 | `,` | Open settings |
 | `Esc` | Close the panel |
@@ -47,6 +58,9 @@ does what you expect.
 
 - Omarchy with the **Quattro** shell.
 - `curl`, and either `sha256sum` or `shasum` — both standard on Omarchy.
+- Optional: `pactl` (PipeWire) for audio device selection, and `notify-send`
+  for call alerts. Both ship with Omarchy; without them those features simply
+  do not appear.
 - A Tuple account. Tuple is a paid product and its Linux client is in alpha.
 - No manual Tuple install: the plugin installs the official client for you, as
   described below.
@@ -96,6 +110,7 @@ Configure these through Omarchy's plugin settings:
 | Refresh interval (seconds) | `20` | How often the panel re-reads client state. 5–600. |
 | Install directory for the Tuple binary | `~/.local/bin` | Where `bin/tuple-install` puts the client. |
 | Show status text next to the bar icon | off | Adds the text label beside the glyph. |
+| Notify and play a sound when a call starts or ends | on | Desktop notification plus a sound, since the client signals neither. |
 
 Saved rooms live alongside these, in Omarchy's `shell.json`.
 
@@ -125,6 +140,12 @@ rm -rf ~/.local/share/tuple       # your Tuple session and client settings
 - **Joining a room accepts only Tuple's own URLs** — `https://tuple.app/c/…`
   and `https://production.tuple.app/c/…`. The client rejects anything else, so
   the panel says so rather than forwarding it.
+- **Screen sharing can fail with `DbusScreenCast failed with
+  UnsupportedVersion`.** This comes from Tuple's client, not the plugin: it
+  asks for an `org.freedesktop.portal.ScreenCast` version that current
+  portals no longer offer. If you hit it, switch the client's `capture`
+  setting from `auto` to `x11` in the panel's settings section — that path
+  goes through XWayland and sidesteps the portal.
 - This project is not affiliated with, endorsed by, or supported by Tuple.
   "Tuple" is the trademark of its owner.
 

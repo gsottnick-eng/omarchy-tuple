@@ -214,6 +214,26 @@ capability. Do not try to hide it.
   an `editorsFocused` counter.
 - Always guard `process.running` before assigning a new command; Quickshell
   ignores command changes while a process runs.
+- Audio device selection is PipeWire's default device, not a per-call route.
+  Tuple's client exposes no audio settings at all, so there is nothing to
+  route per call; changing the device changes it system-wide. Say so in any
+  UI copy rather than implying Tuple knows about it.
+- The real daemon log carries a source location the captured fixtures do not
+  (`…|info|Engine.cpp:589|cli: ls` versus `…|info|connect failed …`). Anything
+  parsing log lines positionally must tolerate both shapes.
+- **The test harness used to leak Tuple daemons, and that is destructive.**
+  Tuple's daemon is a singleton keyed on the abstract socket `@tuple-daemon`
+  and outlives the CLI that revived it. A `fake=False` test that deleted its
+  sandbox left a daemon holding the socket with its data directory gone
+  underneath it; every later client attached to that daemon, so the
+  developer's own sign-in went nowhere and `~/.local/share/tuple/0/log.txt`
+  was never written — which silently disables all call-state inference.
+  `Harness.stop_sandbox_processes` now kills processes whose executable lives
+  inside the sandbox. Do not "simplify" it to `tuple off`: that stops
+  whichever daemon holds the socket, quite possibly the developer's.
+- Running the panel suite launches real browser windows, because
+  `openLoginUrl` runs for real against the fixture's login URL. Expect stray
+  tabs pointing at `production.tuple.app/start?code_challenge=fake0000`.
 - Never assign `actionStatus` directly. `statusTimer` is armed by `note()` and
   clears `actionStatus` 3.2s later — it does not check whether the text it is
   about to erase is the text that armed it. Four call sites used to set
