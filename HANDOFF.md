@@ -214,6 +214,16 @@ capability. Do not try to hide it.
   an `editorsFocused` counter.
 - Always guard `process.running` before assigning a new command; Quickshell
   ignores command changes while a process runs.
+- On a multi-monitor machine the shell logs "QML IpcHandler ... Handler was
+  registered but will not be used because another handler is registered for
+  target io.github.gsottnick-eng.tuple" at every start. This is expected and
+  is not worth fixing. Omarchy instantiates a bar widget once per monitor, so
+  the IpcHandler is constructed once per monitor and only the first registers.
+  Omarchy's own omarchy.agents, omarchy.audio, omarchy.indicators and
+  omarchy.system-update log exactly the same line, as does Ui/Panel.qml
+  itself. The plugin follows the first-party pattern (`manageIpc: false` plus
+  its own handler, copied from omarchy.agents); deviating from it to silence
+  the warning would be worse than the warning.
 - Audio device selection is PipeWire's default device, not a per-call route.
   Tuple's client exposes no audio settings at all, so there is nothing to
   route per call; changing the device changes it system-wide. Say so in any
