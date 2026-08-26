@@ -18,11 +18,20 @@ Working and covered by tests:
 
 Not done:
 
-- **No README and no LICENSE.** The marketplace requires both at the repo root.
-  `manifest.json` claims MIT, so a `LICENSE` file has to exist and match.
 - **No `preview.png`.** Optional, but a listing without one looks unfinished.
-- **Not published.** The repo also has to move to a public GitHub repository
-  first; the marketplace only accepts GitHub root URLs.
+- **Not submitted.** The repo now lives at
+  `https://github.com/gsottnick-eng/omarchy-tuple` but is still private; it has
+  to be public before the marketplace will take it.
+- **Never run under real Quickshell.** See the caveat below. Still true.
+
+Done since the first handoff:
+
+- `README.md` at the repo root, with install *and* removal sections, written
+  against the tree rather than against this document.
+- `LICENSE` (MIT), matching `manifest.json`.
+- The plugin id is now `io.github.gsottnick-eng.tuple`, matching the GitHub
+  account that owns the repo.
+- Fixed a status-message race; see "Traps" below.
 
 The one caveat worth taking seriously: **the plugin has never run under real
 Quickshell.** The test harness is PySide6 with hand-written stand-ins for the
@@ -36,7 +45,7 @@ through it once before submitting.
 
 | File | Role |
 | --- | --- |
-| `manifest.json` | Plugin id `io.github.gavinsottnick.tuple`, kind `bar-widget`, entry `Panel.qml`, settings schema |
+| `manifest.json` | Plugin id `io.github.gsottnick-eng.tuple`, kind `bar-widget`, entry `Panel.qml`, settings schema |
 | `Panel.qml` | Everything visual: bar button, dropdown, contacts, rooms, settings, install flow |
 | `Service.qml` | Owns the client: polls status, runs commands, holds state |
 | `Model.js` | Pure parsing and normalisation, no QML types, unit-testable in Node |
@@ -166,10 +175,10 @@ box.
 
 4. **Take a `preview.png`** of the open dropdown.
 
-5. **Move to public GitHub.** The plugin id is
-   `io.github.gavinsottnick.tuple`; if the GitHub account is not
-   `gavinsottnick`, change the id to match and update every reference. Ids are
-   permanent and cannot be reused once listed.
+5. **Make the GitHub repo public.** It exists at
+   `https://github.com/gsottnick-eng/omarchy-tuple` and the id already matches
+   the account. Ids are permanent and cannot be reused once listed, so do not
+   change it again after the listing goes up.
 
 6. **Submit.** The full procedure is in the marketplace repo's `SUBMISSION.md`
    (`HANCORE-linux/omarchy-plugin-marketplace`). It is a GitHub issue titled
@@ -205,3 +214,19 @@ capability. Do not try to hide it.
   an `editorsFocused` counter.
 - Always guard `process.running` before assigning a new command; Quickshell
   ignores command changes while a process runs.
+- Never assign `actionStatus` directly. `statusTimer` is armed by `note()` and
+  clears `actionStatus` 3.2s later — it does not check whether the text it is
+  about to erase is the text that armed it. Four call sites used to set
+  `actionStatus =` directly, so a `note()` fired moments earlier would wipe a
+  freshly-set message. "Finish signing in in your browser" was the worst
+  casualty. Use `note()` for a toast that should expire, `progress()` for an
+  in-flight status that should stay until its operation clears it.
+- `omarchy plugin validate .` fails on a tree that has run the panel tests:
+  the harness builds `tests/harness/.qsroot/qs/{Commons,Ui}` as symlinks into
+  the Omarchy shell, and the validator rejects symlinks anywhere in a plugin
+  folder. They are gitignored and never committed, so a fresh clone validates
+  fine. `rm -rf tests/harness/.qsroot` before validating.
+- Do not "modernise" `Service.qml`'s clipboard copy to `Util.execArgv`. That
+  helper exists on the `quattro` branch but NOT in shipped Omarchy 4.0.0, so
+  using it would break the plugin on installed systems. The current
+  `bash -c` + `Util.shellQuote` form is correctly quoted and works on both.
