@@ -253,6 +253,17 @@ Item {
 
   function stopDaemon() {
     daemonStoppedByUser = true
+    // A poll that was already in flight at the exact instant of this click
+    // races the actual shutdown. Confirmed live: the raced CLI invocation
+    // became the resident daemon itself and never returned -- daemonRunning
+    // read true again within the same second, the process sat there for
+    // over two minutes at 0% CPU, and killing it only for the very next
+    // poll to repeat the same race. Reap anything already running right
+    // now, the same way the watchdog below reaps a hung one, rather than
+    // leaving up to a 12s window for it to race the shutdown.
+    if (contactsProcess.running) contactsProcess.running = false
+    if (settingsProcess.running) settingsProcess.running = false
+    if (roomsProcess.running) roomsProcess.running = false
     runAction(["off"], "Stopping Tuple…")
   }
   function endCall() { runAction(["end"], "Leaving the call…") }
