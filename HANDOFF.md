@@ -234,6 +234,32 @@ capability. Do not try to hide it.
   Tuple's client exposes no audio settings at all, so there is nothing to
   route per call; changing the device changes it system-wide. Say so in any
   UI copy rather than implying Tuple knows about it.
+- **The log-derived call state could resurrect itself after ending a call.**
+  `logProcess` re-read a fixed `tail -n 300` window on every poll. Once "call
+  connected" scrolled INTO that window it stayed there until 300 newer lines
+  pushed it back out, so every subsequent poll re-applied it -- even after an
+  explicit "end" response had already set `inCall = false` correctly. This is
+  what made clicking "Leave the call" appear to do nothing: the panel would
+  clear, then the next poll (as soon as 700ms later, via settleTimer) would
+  flip it straight back. Fixed by reading only the bytes appended since the
+  last poll (`_logBytesRead` in Service.qml) instead of a fixed window, so a
+  marker is only ever applied once. See
+  `tests/fixtures/real-daemon-log-no-end-marker.txt` for the real capture that
+  exposed this: a genuine call ended, confirmed independently via `tuple end`,
+  and the log never wrote "peer left call", "call ended", or "synthesizing
+  room leave" -- those three LOG_MARKERS patterns are carried over from the
+  original handoff and have still never been confirmed against a real client.
+  Trust the client's direct command response over the log for anything the
+  response already tells you.
+- **`muted`/`sharing` had no direct-response path for the success case.**
+  `classifyResponse` has no case for a bare successful mute/share confirmation
+  (only the failure text, "can't mute, not in a call", is a captured fixture),
+  so `muted` was set only by the "sending audio" log marker -- which, in the
+  same real session above, never appeared even once. `toggleMute()`/
+  `toggleShare()` now record which property they are about to flip in
+  `_pendingToggle`, and `_handleResponse` applies it on any response that is
+  not an error or "not in a call". This is what made the panel keep reading
+  "Microphone live" regardless of what was actually done.
 - The real daemon log carries a source location the captured fixtures do not
   (`…|info|Engine.cpp:589|cli: ls` versus `…|info|connect failed …`). Anything
   parsing log lines positionally must tolerate both shapes.

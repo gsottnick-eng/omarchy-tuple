@@ -225,6 +225,30 @@ class PanelTest(unittest.TestCase):
         self.assertFalse(state["panel"]["showCall"])
         self.assertNotIn("in_call", harness.client_state())
 
+    def test_leaving_a_call_stays_left_across_later_polls(self):
+        # A real client was observed writing "call connected" and then never
+        # writing a matching end-of-call marker for the rest of that daemon's
+        # log, even though the call had genuinely ended (confirmed by asking
+        # the client directly). If the log is re-scanned as a fixed window
+        # instead of only the bytes appended since the last poll, "call
+        # connected" is still sitting in that window on every later poll with
+        # nothing to counter it, and it resurrects inCall=true right after
+        # "end" correctly cleared it -- this is what a user saw as clicking
+        # "Leave the call" not working. A short refresh interval forces
+        # several real background polls (refreshTimer, not the `refresh`
+        # step, which only re-probes for the binary) inside the wait below;
+        # none of them may bring the call back.
+        harness = self.harness(logged_in=True, settings={"refreshIntervalSec": 5})
+        state = harness.run([
+            "call:0", "wait:1500",
+            "end", "wait:1500",
+            "wait:6500",
+            "wait:6500",
+        ])
+        self.assertFalse(state["inCall"])
+        self.assertFalse(state["sharing"])
+        self.assertFalse(state["panel"]["showCall"])
+
     def test_a_new_call_reveals_and_remembers_the_personal_room(self):
         harness = self.harness(logged_in=True)
         state = harness.run(["new", "wait:1500"])

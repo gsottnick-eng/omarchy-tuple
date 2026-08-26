@@ -1,0 +1,22 @@
+# Not a command-response fixture like the others: this is an excerpt of a real
+# daemon log (~/.local/share/tuple/0/log.txt) captured live on 2026-08-26 from
+# the official v2026_08_20.0 client, spanning a call that was joined and then
+# genuinely ended (confirmed independently by asking the client directly:
+# `tuple end` answered "already not in a call" afterward).
+#
+# It contains "call connected" -- the one LOG_MARKERS pattern confirmed to
+# match real client output -- and then, for the rest of that daemon's log,
+# nothing matching "peer left call", "call ended", or "synthesizing room
+# leave". Those three patterns are carried over from HANDOFF.md's original
+# description of the client's behaviour and were never independently
+# confirmed; this session is the first real evidence, and it suggests the
+# real client does not write a matching end-of-call line, at least not for a
+# locally-initiated end. Kept here as evidence, not as a Model.js fixture --
+# nothing in the test suite parses this file. See HANDOFF.md.
+21:28:50.637|395863|395863|info|call connected
+21:28:53.201|395863|395863|info|Engine.cpp:589|cli: ls
+21:28:53.201|395863|395863|info|fd=11 (EndOfStream)
+21:34:23.825|395863|395863|info|Engine.cpp:552|cli: end
+21:34:23.825|395863|395863|info|fd=11 (EndOfStream)
+21:34:23.885|395863|395863|info|Engine.cpp:589|cli: ls
+21:34:23.885|395863|395863|info|fd=11 (EndOfStream)
