@@ -849,7 +849,7 @@ Panel {
       spacing: Style.space(8)
 
       Text {
-        text: roomRow.room && roomRow.room.kind === "personal" ? "󰀄" : "󰚄"
+        text: roomRow.room && roomRow.room.kind === "personal" ? "󰀄" : "󰕧"
         color: roomRow.occupied ? root.online : root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.icon

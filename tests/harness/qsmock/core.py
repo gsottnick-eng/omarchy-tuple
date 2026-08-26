@@ -84,6 +84,10 @@ class QsWindowAttached(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._item = parent if isinstance(parent, QQuickItem) else None
+        if self._item is not None:
+            # Items are attached before they are in a window, so the binding
+            # has to be told once the window exists or popups anchor to (0, 0).
+            self._item.windowChanged.connect(self.windowChanged)
 
     @Property(QObject, notify=windowChanged)
     def window(self):
@@ -119,7 +123,11 @@ class Region(QObject):
 
 @QmlElement
 class TransformWatcher(QObject):
-    """Reactivity hook only; the harness never moves the anchor after layout."""
+    """Reports movement between two items so popup placement stays a live binding.
+
+    Without this the anchor position is read once, before layout, and every
+    popup lands at the top-left corner.
+    """
 
     changed = Signal()
 
@@ -127,13 +135,40 @@ class TransformWatcher(QObject):
         super().__init__(parent)
         self._a = None
         self._b = None
+        self._transform = 0
 
-    a = declare(QObject, "_a", changed)
-    b = declare(QObject, "_b", changed)
+    def _watch(self, item):
+        if not isinstance(item, QQuickItem):
+            return
+        for signal in (item.xChanged, item.yChanged, item.widthChanged, item.heightChanged):
+            signal.connect(self._bump)
+
+    def _bump(self):
+        self._transform += 1
+        self.changed.emit()
+
+    def _get_a(self):
+        return self._a
+
+    def _set_a(self, value):
+        self._a = value
+        self._watch(value)
+        self._bump()
+
+    def _get_b(self):
+        return self._b
+
+    def _set_b(self, value):
+        self._b = value
+        self._watch(value)
+        self._bump()
+
+    a = Property(QObject, _get_a, _set_a, notify=changed)
+    b = Property(QObject, _get_b, _set_b, notify=changed)
 
     @Property(int, notify=changed)
     def transform(self):
-        return 0
+        return self._transform
 
 
 @QmlElement

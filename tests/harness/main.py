@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -42,6 +43,25 @@ def build_import_root(omarchy_shell: Path) -> Path:
             link.unlink()
         link.symlink_to(target)
     return root
+
+
+def apply_theme(theme: Path, font_size: int) -> None:
+    """Point HOME at a throwaway Omarchy config so the panel renders themed.
+
+    Color and Style read the active theme and `[font] base-size` from the
+    user's home directory, so screenshots are only representative if those
+    files exist.
+    """
+    if not theme.is_dir():
+        raise SystemExit(f"no such theme: {theme}")
+    home = Path(tempfile.mkdtemp(prefix="omarchy-home-"))
+    current = home / ".local" / "state" / "omarchy" / "current"
+    current.mkdir(parents=True)
+    (current / "theme").symlink_to(theme)
+    config = home / ".config" / "omarchy"
+    config.mkdir(parents=True)
+    (config / "shell.toml").write_text(f"[font]\nbase-size = {font_size}\n")
+    os.environ["HOME"] = str(home)
 
 
 def find_service(plugin: QObject) -> QObject | None:
@@ -240,12 +260,17 @@ def main() -> int:
     parser.add_argument("--closed", dest="open_panel", action="store_false")
     parser.add_argument("--settle", type=int, default=2500, help="ms to let the client answer before capturing")
     parser.add_argument("--background", default="#0b0e12")
+    parser.add_argument("--theme", help="Omarchy theme name to render with, e.g. tokyo-night")
+    parser.add_argument("--font-size", type=int, default=12, help="Omarchy [font] base-size for --theme runs")
     parser.add_argument("--do", default="", help="comma-separated interactions, e.g. 'call:0,wait:1200,mute'")
     parser.add_argument("--dump-each", help="directory for a state dump after every interaction")
     parser.add_argument("--step-delay", type=int, default=900, help="ms between interactions")
     args = parser.parse_args()
 
-    import_root = build_import_root(Path(args.omarchy).expanduser().resolve())
+    omarchy_shell = Path(args.omarchy).expanduser().resolve()
+    import_root = build_import_root(omarchy_shell)
+    if args.theme:
+        apply_theme(omarchy_shell.parent / "themes" / args.theme, args.font_size)
 
     app = QGuiApplication(sys.argv[:1])
     engine = QQmlApplicationEngine()
