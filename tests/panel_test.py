@@ -14,6 +14,7 @@ account. The tests marked "real client" run against the official binary.
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -96,7 +97,38 @@ class Harness:
     def client_state(self):
         return sorted(p.name for p in self.state.iterdir())
 
+    def stop_sandbox_processes(self):
+        """Stop anything still running out of this sandbox.
+
+        Tuple's daemon is a singleton keyed on the abstract socket
+        @tuple-daemon, and it outlives the CLI invocation that revived it. A
+        real-client test that only deletes its workdir leaves that daemon
+        holding the socket with its data directory deleted underneath it.
+        Every later client then attaches to a daemon that cannot persist
+        anything -- including the developer's own session, which silently
+        stops recording logins and writing the log the panel reads.
+
+        Match on the executable path so this only ever touches processes this
+        sandbox started. `tuple off` would be the polite way to ask, but it
+        stops whichever daemon holds the socket, which may be the developer's.
+        """
+        root = str(self.workdir)
+        for entry in Path("/proc").iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                exe = os.readlink(entry / "exe")
+            except OSError:
+                continue
+            # A deleted binary reads back as "/path/to/tuple (deleted)".
+            if exe.startswith(root):
+                try:
+                    os.kill(int(entry.name), signal.SIGTERM)
+                except OSError:
+                    pass
+
     def cleanup(self):
+        self.stop_sandbox_processes()
         shutil.rmtree(self.workdir, ignore_errors=True)
 
 
@@ -295,6 +327,38 @@ class PanelTest(unittest.TestCase):
         self.assertTrue(os.access(target / "tuple", os.X_OK))
         self.assertTrue(state["installed"])
         self.assertRegex(state["clientVersion"], r"^v\d{4}_\d{2}_\d{2}")
+
+    # ----------------------------------------------------------------- audio
+
+    def test_audio_devices_come_from_pipewire_not_the_client(self):
+        if not shutil.which("pactl"):
+            self.skipTest("pactl not installed")
+        harness = self.harness(logged_in=True)
+        state = harness.run()
+        self.assertTrue(state["audioAvailable"])
+        # Tuple exposes no audio settings, so none of these may come from it.
+        self.assertNotIn("output", [s["key"] for s in state["settings"]])
+        for device in state["audioOutputs"] + state["audioInputs"]:
+            self.assertTrue(device["name"])
+            self.assertTrue(device["label"])
+        # A sink monitor is a loopback of output, never a microphone.
+        self.assertTrue(all(not d["name"].endswith(".monitor") for d in state["audioInputs"]))
+        self.assertTrue(state["panel"]["showAudio"])
+
+    def test_the_panel_hides_audio_when_the_devices_cannot_be_read(self):
+        harness = self.harness(logged_in=True)
+        # Shadow pactl with a stub that fails, rather than emptying PATH --
+        # the plugin needs sh for every other command it runs.
+        shadow = harness.workdir / "shadow"
+        shadow.mkdir()
+        stub = shadow / "pactl"
+        stub.write_text("#!/bin/sh\nexit 1\n")
+        stub.chmod(0o755)
+        harness.env["PATH"] = f"{shadow}:{harness.env['PATH']}"
+        state = harness.run()
+        self.assertFalse(state["audioAvailable"])
+        self.assertEqual(state["audioOutputs"], [])
+        self.assertFalse(state["panel"]["showAudio"])
 
     # ----------------------------------------------------------- real client
 

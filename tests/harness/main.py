@@ -82,6 +82,8 @@ def snapshot(plugin: QObject, service: QObject, bar: QObject) -> dict:
         return default if value is None else value
 
     settings = prop(service, "clientSettings", []) or []
+    audio_outputs = prop(service, "audioOutputs", []) or []
+    audio_inputs = prop(service, "audioInputs", []) or []
     rooms = prop(service, "rooms", []) or []
     contacts = prop(service, "contacts", []) or []
 
@@ -106,6 +108,11 @@ def snapshot(plugin: QObject, service: QObject, bar: QObject) -> dict:
         "installStage": prop(service, "installStage", ""),
         "installMessage": prop(service, "installMessage", ""),
         "personalUrl": prop(service, "personalUrl", ""),
+        "audioAvailable": prop(service, "audioAvailable", False),
+        "audioOutput": prop(service, "audioOutput", ""),
+        "audioInput": prop(service, "audioInput", ""),
+        "audioOutputs": [{"name": d.get("name"), "label": d.get("label")} for d in audio_outputs],
+        "audioInputs": [{"name": d.get("name"), "label": d.get("label")} for d in audio_inputs],
         "contacts": [
             {"name": c.get("name"), "email": c.get("email"), "status": c.get("status"),
              "favorite": c.get("favorite"), "selector": c.get("selector"), "initials": c.get("initials")}
@@ -128,6 +135,7 @@ def snapshot(plugin: QObject, service: QObject, bar: QObject) -> dict:
             "showCall": prop(plugin, "showCall", False),
             "showRooms": prop(plugin, "showRooms", False),
             "showPeople": prop(plugin, "showPeople", False),
+            "showAudio": prop(plugin, "showAudio", False),
             "settingsOpen": prop(plugin, "settingsOpen", False),
             "focusSection": prop(plugin, "focusSection", ""),
             "roomIndex": prop(plugin, "roomIndex", 0),
@@ -179,6 +187,10 @@ def apply_step(step: str, plugin: QObject, service: QObject) -> None:
         invoke(plugin, "open")
     elif name == "close":
         invoke(plugin, "close")
+    elif name == "cycle-output":
+        invoke(service, "cycleAudioOutput")
+    elif name == "cycle-input":
+        invoke(service, "cycleAudioInput")
     elif name == "settings-open":
         plugin.setProperty("settingsOpen", True)
     elif name == "add-room-open":

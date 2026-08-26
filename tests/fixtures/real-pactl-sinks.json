@@ -1,0 +1,20 @@
+[
+  {
+    "index": 60,
+    "name": "alsa_output.pci-0000_02_00.1.hdmi-stereo",
+    "description": "GB203 High Definition Audio Controller Digital Stereo (HDMI)",
+    "state": "SUSPENDED"
+  },
+  {
+    "index": 78,
+    "name": "alsa_output.usb-Shure_Inc_Shure_MVX2U_MVX2U_3-35916b66c4f67e5491eb328aa0faa319-01.analog-stereo",
+    "description": "Shure MVX2U Analog Stereo",
+    "state": "SUSPENDED"
+  },
+  {
+    "index": 80,
+    "name": "alsa_output.pci-0000_80_1f.3.analog-stereo",
+    "description": "800 Series Chipset Family Audio Context Engine (ACE) Analog Stereo",
+    "state": "SUSPENDED"
+  }
+]

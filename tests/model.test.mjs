@@ -22,6 +22,8 @@ const exported = [...source.matchAll(/^function\s+(\w+)/gm)].map((match) => matc
 const Model = new Function(`${source}\nreturn { ${exported.join(", ")} }`)()
 
 const fixture = (name) => readFileSync(join(here, "fixtures", `${name}.txt`), "utf8")
+// pactl fixtures keep their .json extension, so they need the full name.
+const fixtureFile = (name) => readFileSync(join(here, "fixtures", name), "utf8")
 
 test("detects the installed client generation from its banner", () => {
   const caps = Model.detectCapabilities(fixture("real-banner"))
@@ -333,4 +335,63 @@ test("clamps the refresh interval to a sane range", () => {
   assert.equal(Model.clampInt("45", 20, 5, 600), 45)
   assert.equal(Model.clampInt("1", 20, 5, 600), 5)
   assert.equal(Model.clampInt("nonsense", 20, 5, 600), 20)
+})
+
+// ------------------------------------------------------------------- audio
+
+test("lists audio outputs from pactl JSON", () => {
+  const devices = Model.parseAudioDevices(fixtureFile("real-pactl-sinks.json"), "sink")
+  assert.equal(devices.length, 3)
+  assert.deepEqual(devices.map((d) => d.label), [
+    "800 Series Chipset Family Audio Context Engine (ACE) Analog Stereo",
+    "GB203 High Definition Audio Controller Digital Stereo (HDMI)",
+    "Shure MVX2U Analog Stereo",
+  ])
+})
+
+test("drops sink monitors when listing audio inputs", () => {
+  const devices = Model.parseAudioDevices(fixtureFile("real-pactl-sources.json"), "source")
+  assert.equal(devices.length, 3)
+  assert.ok(devices.every((d) => !d.name.endsWith(".monitor")))
+  assert.deepEqual(devices.map((d) => d.label), [
+    "800 Series Chipset Family Audio Context Engine (ACE) Analog Stereo",
+    "Razer Kiyo X Analog Stereo",
+    "Shure MVX2U Mono",
+  ])
+})
+
+test("survives pactl being absent or answering with rubbish", () => {
+  assert.deepEqual(Model.parseAudioDevices("", "sink"), [])
+  assert.deepEqual(Model.parseAudioDevices("command not found", "sink"), [])
+  assert.deepEqual(Model.parseAudioDevices("{}", "sink"), [])
+  assert.deepEqual(Model.parseAudioDevices('[{"description":"no name"}]', "sink"), [])
+})
+
+test("reads the default device name back out of pactl", () => {
+  assert.equal(Model.parseDefaultDevice("alsa_output.pci-0000_80_1f.3.analog-stereo\n"),
+    "alsa_output.pci-0000_80_1f.3.analog-stereo")
+  assert.equal(Model.parseDefaultDevice("\n\n"), "")
+  assert.equal(Model.parseDefaultDevice("Failure: no such entity"), "")
+})
+
+test("names the active device for the panel", () => {
+  const devices = Model.parseAudioDevices(fixtureFile("real-pactl-sinks.json"), "sink")
+  assert.equal(Model.activeDeviceLabel(devices, "alsa_output.pci-0000_80_1f.3.analog-stereo"),
+    "800 Series Chipset Family Audio Context Engine (ACE) Analog Stereo")
+  assert.equal(Model.activeDeviceLabel(devices, "gone"), "")
+  assert.equal(Model.activeDeviceLabel(null, "gone"), "")
+})
+
+test("splits the two default device names pactl prints back to back", () => {
+  const pair = Model.parseDefaultPair("alsa_output.a.analog-stereo\nalsa_input.b.mono-fallback\n")
+  assert.deepEqual(pair, { sink: "alsa_output.a.analog-stereo", source: "alsa_input.b.mono-fallback" })
+  assert.deepEqual(Model.parseDefaultPair(""), { sink: "", source: "" })
+  assert.deepEqual(Model.parseDefaultPair("Failure: no such entity"), { sink: "", source: "" })
+})
+
+test("strips daemon log lines that carry a source location", () => {
+  // The captured fixtures predate this shape: the running client emits
+  // "…|info|Engine.cpp:589|cli: ls", one field longer than "…|info|message".
+  const raw = "19:48:23.767|350698|350696|info|Engine.cpp:589|cli: ls\nnot logged in\n"
+  assert.equal(Model.stripDaemonLog(raw), "not logged in\n")
 })
