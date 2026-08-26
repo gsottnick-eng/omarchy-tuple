@@ -26,6 +26,16 @@ Item {
 
   // ---------------------------------------------------------- session
   property bool daemonRunning: false
+  // True from the moment the user clicks "stop" until the daemon is
+  // confirmed running again. Any `tuple` subcommand revives a stopped
+  // daemon as a side effect -- HANDOFF.md documents this, and it means
+  // refreshData()'s own background polls (`tuple ls`, `tuple settings`)
+  // silently undid "Stop Tuple" a few seconds after every click. Those
+  // three polls are skipped while this is true; the passive
+  // /proc/net/unix check keeps running regardless, so an external revival
+  // (the user running `tuple on` themselves, another client instance)
+  // still clears it.
+  property bool daemonStoppedByUser: false
   property bool loggedIn: false
   property bool loggingIn: false
   property string loginUrl: ""
@@ -165,17 +175,23 @@ Item {
 
   function refreshData() {
     if (!installed) return
-    if (!contactsProcess.running) {
-      contactsProcess.command = command(["ls"])
-      contactsProcess.running = true
-    }
-    if (!settingsProcess.running) {
-      settingsProcess.command = command(["settings"])
-      settingsProcess.running = true
-    }
-    if (supportsRooms && !roomsProcess.running) {
-      roomsProcess.command = command(["rooms", "list", "--format", "json"])
-      roomsProcess.running = true
+    // Any of the three polls below runs the `tuple` binary, which revives
+    // the daemon as a side effect if it is not already running. Skip them
+    // while the user has explicitly stopped it -- otherwise stopping is
+    // undone by the plugin's own next poll, typically within a few seconds.
+    if (!daemonStoppedByUser) {
+      if (!contactsProcess.running) {
+        contactsProcess.command = command(["ls"])
+        contactsProcess.running = true
+      }
+      if (!settingsProcess.running) {
+        settingsProcess.command = command(["settings"])
+        settingsProcess.running = true
+      }
+      if (supportsRooms && !roomsProcess.running) {
+        roomsProcess.command = command(["rooms", "list", "--format", "json"])
+        roomsProcess.running = true
+      }
     }
     if (!logProcess.running) {
       // Read only what has grown past _logBytesRead; the log's total size
@@ -230,8 +246,15 @@ Item {
     actionProcess.running = true
   }
 
-  function startDaemon() { runAction(["on"], "Starting Tuple…") }
-  function stopDaemon() { runAction(["off"], "Stopping Tuple…") }
+  function startDaemon() {
+    daemonStoppedByUser = false
+    runAction(["on"], "Starting Tuple…")
+  }
+
+  function stopDaemon() {
+    daemonStoppedByUser = true
+    runAction(["off"], "Stopping Tuple…")
+  }
   function endCall() { runAction(["end"], "Leaving the call…") }
   function toggleMute() {
     _pendingToggle = "muted"
@@ -591,7 +614,11 @@ Item {
   Process {
     id: daemonProcess
     stdout: StdioCollector { id: daemonOut; waitForEnd: true }
-    onExited: root.daemonRunning = Model.daemonSocketPresent(daemonOut.text)
+    onExited: {
+      var running = Model.daemonSocketPresent(daemonOut.text)
+      if (running && root.daemonStoppedByUser) root.daemonStoppedByUser = false
+      root.daemonRunning = running
+    }
   }
 
   Process {
