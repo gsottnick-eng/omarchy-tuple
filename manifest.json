@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.gavinsottnick.tuple",
+  "name": "Tuple",
+  "version": "1.0.0",
+  "author": "Gavin Sottnick",
+  "license": "MIT",
+  "description": "Install Tuple and drive pair programming from the Omarchy bar: contacts, rooms, call controls, and every client setting in one dropdown.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Tuple",
+    "description": "Sign in, call a teammate, join a room, and control screen sharing without leaving the bar.",
+    "category": "Communication",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalSec": 20,
+      "installDir": "~/.local/bin",
+      "showLabel": false,
+      "savedRooms": []
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 5,
+        "max": 600,
+        "step": 5,
+        "defaultValue": 20
+      },
+      {
+        "key": "installDir",
+        "type": "string",
+        "label": "Install directory for the Tuple binary",
+        "defaultValue": "~/.local/bin"
+      },
+      {
+        "key": "showLabel",
+        "type": "boolean",
+        "label": "Show status text next to the bar icon",
+        "defaultValue": false
+      }
+    ]
+  }
+}
