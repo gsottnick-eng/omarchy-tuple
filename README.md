@@ -8,6 +8,10 @@ plugin installs that client for you and gives it the dropdown it does not ship
 with: who is online, one-click calling, saved rooms, call controls, and the
 client's own settings, all from the bar.
 
+<p align="center">
+  <img src="preview.png" alt="The Tuple panel open on the Omarchy bar" width="430">
+</p>
+
 ## Features
 
 - **Bar** — a Tuple glyph that reflects the current state, optionally with a
@@ -112,7 +116,13 @@ Configure these through Omarchy's plugin settings:
 | Show status text next to the bar icon | off | Adds the text label beside the glyph. |
 | Notify and play a sound when a call starts or ends | on | Desktop notification plus a sound, since the client signals neither. |
 
-Saved rooms live alongside these, in Omarchy's `shell.json`.
+Saved rooms live alongside these, in Omarchy's `shell.json`. Change any of
+them from the command line with:
+
+```bash
+omarchy bar set io.github.gsottnick-eng.tuple callAlerts false
+omarchy bar set io.github.gsottnick-eng.tuple refreshIntervalSec 60
+```
 
 ## Remove
 

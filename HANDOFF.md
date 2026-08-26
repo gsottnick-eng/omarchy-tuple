@@ -224,6 +224,12 @@ capability. Do not try to hide it.
   itself. The plugin follows the first-party pattern (`manageIpc: false` plus
   its own handler, copied from omarchy.agents); deviating from it to silence
   the warning would be worse than the warning.
+- Plugin settings do not always arrive as the type the manifest declares.
+  `omarchy bar set <id> <key> <value>` writes the value as a string unless
+  `--json` is passed, so a boolean the user turned on reaches the plugin as
+  "true". Comparing with `=== true` therefore turns the setting off at the
+  moment it was asked for -- `showLabel` shipped that way and never worked
+  from the CLI. Read booleans through `Model.toBool`, never `=== true`.
 - Audio device selection is PipeWire's default device, not a per-call route.
   Tuple's client exposes no audio settings at all, so there is nothing to
   route per call; changing the device changes it system-wide. Say so in any
