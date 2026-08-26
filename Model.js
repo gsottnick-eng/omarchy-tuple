@@ -69,6 +69,18 @@ function daemonSocketPresent(procNetUnix) {
   return /@tuple-daemon\b/.test(text(procNetUnix))
 }
 
+// Lists that arrive from QML settings are QVariantLists, which are array-like
+// but not JS arrays, so Array.isArray alone would silently drop saved rooms.
+function toArray(value) {
+  if (Array.isArray(value)) return value
+  if (value && typeof value === "object" && typeof value.length === "number") {
+    var out = []
+    for (var i = 0; i < value.length; i++) out.push(value[i])
+    return out
+  }
+  return []
+}
+
 function elide(value, max) {
   var limit = max > 0 ? max : 140
   var collapsed = trimmed(text(value).replace(/\s+/g, " "))
@@ -118,6 +130,8 @@ var RESPONSE_RULES = [
   { pattern: /\bnot logged in\b/i,                   kind: "logged-out" },
       { pattern: /\balready logged in\b/i,               kind: "logged-in" },
       { pattern: /\balready logged out\b/i,              kind: "logged-out" },
+  { pattern: /\blogout initiated\b/i,                kind: "logged-out" },
+  { pattern: /\bstarting new call with personal url\b/i, kind: "joining" },
   { pattern: /\balready not in a call\b/i,           kind: "no-call" },
   { pattern: /\bcan't (?:mute|unmute|share|unshare)\b[^.]*\bnot in a call\b/i, kind: "no-call" },
   { pattern: /\bcan't join call, already in a call\b/i, kind: "in-call" },
@@ -151,10 +165,31 @@ function classifyResponse(raw) {
 
 // --------------------------------------------------------------- contacts
 
-// Legacy rows look like `  1) Ada Lovelace <ada@example.com>`. The leading
-// number is the selector `tuple call` expects on stdin, so it is kept as the
-// call target rather than recomputed from array position.
-var CONTACT_ROW = /^\s*(\d+)\)\s*(.*?)\s*<([^>]*)>\s*(.*)$/
+// The client prints contacts two different ways, and the difference matters.
+//
+//   `tuple ls`     ->  "  {} {} <{}> [{}]{}"   id, name, email, status, extra
+//   `tuple call`   ->  "  {}) {} <{}>"         a numbered picker
+//
+// `tuple favorite` takes the id from the first form; `tuple call` reads the
+// number from the second form on stdin. Neither value can substitute for the
+// other, so both are parsed separately.
+var LIST_ROW = /^\s*(\S+)\s+(.*?)\s*<([^>]*)>\s*\[([^\]]*)\]\s*(.*)$/
+var PICKER_ROW = /^\s*(\d+)\)\s*(.*?)\s*<([^>]*)>\s*(.*)$/
+
+function makeContact(selector, name, email, status, extra) {
+  var rawName = trimmed(name)
+  var trailing = trimmed(extra)
+  var favorite = /^[*★]/.test(rawName) || /[*★]/.test(trailing) || /favorit/i.test(trailing)
+  var cleanName = rawName.replace(/^[*★]\s*/, "")
+  return {
+    selector: trimmed(selector),
+    name: cleanName === "" ? trimmed(email) : cleanName,
+    email: trimmed(email),
+    status: trimmed(status).toLowerCase(),
+    favorite: favorite,
+    initials: initialsFor(cleanName, email)
+  }
+}
 
 function parseContacts(raw) {
   var response = classifyResponse(raw)
@@ -166,20 +201,14 @@ function parseContacts(raw) {
   var contacts = []
   var all = lines(clean)
   for (var i = 0; i < all.length; i++) {
-    var match = all[i].match(CONTACT_ROW)
-    if (!match) continue
-    var name = trimmed(match[2])
-    var favorite = /^[*★]/.test(name)
-    if (favorite) name = trimmed(name.replace(/^[*★]\s*/, ""))
-    var trailing = trimmed(match[4])
-    contacts.push({
-      selector: match[1],
-      name: name,
-      email: trimmed(match[3]),
-      status: trailing.toLowerCase(),
-      favorite: favorite,
-      initials: initialsFor(name, match[3])
-    })
+    var listed = all[i].match(LIST_ROW)
+    if (listed) {
+      contacts.push(makeContact(listed[1], listed[2], listed[3], listed[4], listed[5]))
+      continue
+    }
+    // Accept picker rows too, so a picker captured by mistake still renders.
+    var picked = all[i].match(PICKER_ROW)
+    if (picked) contacts.push(makeContact(picked[1], picked[2], picked[3], picked[4], ""))
   }
 
   var waiting = /waiting for contacts/i.test(clean)
@@ -215,9 +244,42 @@ function parseContactsJson(raw) {
   return { ok: true, loggedIn: true, contacts: contacts, message: "" }
 }
 
+// `tuple call` prints its picker and then reads a number from stdin. Running
+// it once with no input yields the authoritative numbering, so the number sent
+// on the second run is read from the client rather than assumed to match the
+// order of `tuple ls`.
+function parseCallPicker(raw) {
+  var out = []
+  var all = lines(stripDaemonLog(raw))
+  for (var i = 0; i < all.length; i++) {
+    var match = all[i].match(PICKER_ROW)
+    if (!match) continue
+    out.push({
+      number: match[1],
+      name: trimmed(match[2]).replace(/^[*★]\s*/, ""),
+      email: trimmed(match[3])
+    })
+  }
+  return out
+}
+
+function pickerNumberFor(entries, contact) {
+  if (!contact) return ""
+  var list = toArray(entries)
+  var email = trimmed(contact.email).toLowerCase()
+  var name = trimmed(contact.name).toLowerCase()
+  for (var i = 0; i < list.length; i++) {
+    if (email !== "" && trimmed(list[i].email).toLowerCase() === email) return list[i].number
+  }
+  for (var j = 0; j < list.length; j++) {
+    if (name !== "" && trimmed(list[j].name).toLowerCase() === name) return list[j].number
+  }
+  return ""
+}
+
 function sortContacts(contacts) {
   var rank = { online: 0, available: 0, busy: 1, offline: 3 }
-  var list = (contacts || []).slice()
+  var list = toArray(contacts).slice()
   list.sort(function(a, b) {
     if (a.favorite !== b.favorite) return a.favorite ? -1 : 1
     var ra = rank[a.status] === undefined ? 2 : rank[a.status]
@@ -287,9 +349,10 @@ function settingToggleValue(setting) {
 }
 
 function nextEnumValue(setting) {
-  if (!setting || !Array.isArray(setting.options) || setting.options.length === 0) return ""
-  var at = setting.options.indexOf(setting.value)
-  return setting.options[(at + 1) % setting.options.length]
+  var options = setting ? toArray(setting.options) : []
+  if (options.length === 0) return ""
+  var at = options.indexOf(setting.value)
+  return options[(at + 1) % options.length]
 }
 
 // ------------------------------------------------------------------- rooms
@@ -357,14 +420,14 @@ function makeRoom(url, name, options) {
     kind: extra.kind || "saved",
     favorite: extra.favorite === true,
     occupants: extra.occupants === undefined ? -1 : extra.occupants,
-    members: Array.isArray(extra.members) ? extra.members : []
+    members: toArray(extra.members)
   }
 }
 
 function normalizeSavedRooms(stored) {
   var out = []
   var seen = {}
-  var list = Array.isArray(stored) ? stored : []
+  var list = toArray(stored)
   for (var i = 0; i < list.length; i++) {
     var entry = list[i]
     var url = ""
@@ -386,7 +449,7 @@ function normalizeSavedRooms(stored) {
 
 function serializeSavedRooms(rooms) {
   var out = []
-  var list = Array.isArray(rooms) ? rooms : []
+  var list = toArray(rooms)
   for (var i = 0; i < list.length; i++) {
     var room = list[i]
     if (!room || room.kind !== "saved" || !isCallUrl(room.url)) continue
@@ -405,7 +468,7 @@ function parseRoomsJson(raw) {
   for (var i = 0; i < parsed.value.length; i++) {
     var entry = parsed.value[i] || {}
     var url = trimmed(entry.url || entry.join_url)
-    var members = Array.isArray(entry.members) ? entry.members : []
+    var members = toArray(entry.members)
     var occupants = typeof entry.occupants === "number"
       ? entry.occupants
       : (typeof entry.member_count === "number" ? entry.member_count : members.length)
@@ -432,9 +495,9 @@ function mergeRooms(personalUrl, savedRooms, liveRooms) {
   if (isCallUrl(personalUrl)) {
     push(makeRoom(personalUrl, "My personal room", { kind: "personal" }))
   }
-  var live = Array.isArray(liveRooms) ? liveRooms : []
+  var live = toArray(liveRooms)
   for (var i = 0; i < live.length; i++) push(live[i])
-  var saved = Array.isArray(savedRooms) ? savedRooms : []
+  var saved = toArray(savedRooms)
   for (var j = 0; j < saved.length; j++) push(saved[j])
 
   out.sort(function(a, b) {

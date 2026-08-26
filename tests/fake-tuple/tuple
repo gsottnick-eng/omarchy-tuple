@@ -1,0 +1,278 @@
+#!/bin/sh
+# A scripted stand-in for the Tuple for Linux client, used to exercise states a
+# test machine cannot reach without a real Tuple account (signed in, in a call,
+# sharing a screen).
+#
+# Every string below is the real client's, taken either from observed output of
+# v2026_08_20.0 or from the format strings in that binary:
+#
+#   tuple ls    ->  "  {} {} <{}> [{}]{}"
+#   tuple call  ->  "  {}) {} <{}>"
+#
+# State lives in $FAKE_TUPLE_STATE so a test can set up a situation and then
+# assert on what the plugin did with it.
+
+set -eu
+
+STATE="${FAKE_TUPLE_STATE:?FAKE_TUPLE_STATE must point at a state directory}"
+LOG="${XDG_DATA_HOME:-$HOME/.local/share}/tuple/0/log.txt"
+mkdir -p "$STATE" "$(dirname "$LOG")"
+
+flag() { [ -f "$STATE/$1" ]; }
+set_flag() { : > "$STATE/$1"; }
+clear_flag() { rm -f "$STATE/$1"; }
+
+# The daemon logs each command; the plugin derives call state from these lines.
+log() { printf '%s|1234|1234|info|Engine.cpp:100|%s\n' "$(date +%H:%M:%S.%3N)" "$1" >> "$LOG"; }
+
+setting_value() {
+  if [ -f "$STATE/settings/$1" ]; then cat "$STATE/settings/$1"; else printf '%s' "$2"; fi
+}
+
+set_setting() { mkdir -p "$STATE/settings"; printf '%s' "$2" > "$STATE/settings/$1"; }
+
+banner() {
+  cat <<'EOF'
+Tuple Command-Line Interface v2026_08_20.0
+
+  tuple login               | Start the login process.
+  tuple auth AUTH_CODE      | Finish the login process.
+  tuple logout
+
+  tuple call                | Call someone.
+  tuple join CALL_URL       | Join the given call via URL.
+  tuple new                 | Starts and joins a new call with your personal URL.
+  tuple end                 | End and/or leave the current call.
+
+  tuple ls                  | List contacts.
+  tuple favorite USER_ID    | Favorite a contact (or use "unfavorite").
+
+  tuple share/unshare       | Share/Unshare your screen.
+  tuple mute/unmute         | Mute/Unmute your microphone.
+
+  tuple on                  | Ensure the daemon is running to accept incoming calls.
+  tuple off                 | Stop the daemon.
+  tuple ui                  | Show experimental debugging UI.
+
+  tuple settings            | List all settings/values
+  tuple set NAME VALUE      | Update a setting with the given value
+EOF
+}
+
+contacts_file() {
+  if [ -f "$STATE/contacts" ]; then
+    cat "$STATE/contacts"
+  else
+    cat <<'EOF'
+usr_101|Ada Lovelace|ada@example.com|online|
+usr_102|Grace Hopper|grace@example.com|offline| *
+usr_103|Alan Turing|alan@example.com|busy|
+EOF
+  fi
+}
+
+require_login() {
+  if ! flag logged_in; then
+    echo "not logged in"
+    exit 0
+  fi
+}
+
+verb="${1:-}"
+[ $# -gt 0 ] && shift || true
+
+case "$verb" in
+  "")
+    banner
+    ;;
+
+  ls)
+    log "cli: ls"
+    require_login
+    contacts_file | while IFS='|' read -r id name email status extra; do
+      [ -n "$id" ] || continue
+      printf '  %s %s <%s> [%s]%s\n' "$id" "$name" "$email" "$status" "$extra"
+    done
+    ;;
+
+  call)
+    log "cli: call"
+    require_login
+    contacts_file | awk -F'|' 'NF > 1 { printf "  %d) %s <%s>\n", ++n, $2, $3 }'
+    choice=""
+    # The real client blocks on stdin; reading a closed or empty stdin here
+    # reproduces the "no selection" path the plugin's first pass relies on.
+    IFS= read -r choice 2>/dev/null || choice=""
+    total=$(contacts_file | grep -c '|' || echo 0)
+    if [ -z "$choice" ]; then
+      echo "error: enter a number starting from 1"
+      exit 0
+    fi
+    if [ "$choice" -lt 1 ] 2>/dev/null || [ "$choice" -gt "$total" ] 2>/dev/null; then
+      echo "error: $choice is out of range, enter 1-$total"
+      exit 0
+    fi
+    name=$(contacts_file | awk -F'|' -v n="$choice" 'NF > 1 { if (++i == n) print $2 }')
+    echo "calling $name..."
+    set_flag in_call
+    log "entered room"
+    ;;
+
+  settings)
+    printf 'overlay | %s | Show "overlay" annotation window when sharing screen (0|1)\n' "$(setting_value overlay 1)"
+    printf 'start-calls-muted | %s | Start with microphone muted when joining a call (0|1)\n' "$(setting_value start-calls-muted 0)"
+    printf 'capture | %s | Screen capture mechanism (auto|x11|portal)\n' "$(setting_value capture auto)"
+    printf 'guest-mode | %s | Current mode in screen window (annotation|control)\n' "$(setting_value guest-mode annotation)"
+    printf 'transcription-model | %s | File path to whisper ggml model\n' "$(setting_value transcription-model '')"
+    ;;
+
+  set)
+    if [ $# -lt 2 ]; then
+      echo "error: 'set' requires 2 args (NAME/VALUE) but got $#"
+      exit 0
+    fi
+    case "$1" in
+      overlay|start-calls-muted|capture|guest-mode|transcription-model)
+        set_setting "$1" "$2"
+        echo "setting '$1' updated"
+        ;;
+      *)
+        echo "error: unknown setting '$1'"
+        ;;
+    esac
+    ;;
+
+  login)
+    cat <<'EOF'
+--------------------------------------------------------------------------------
+Tuple Login Instructions:
+--------------------------------------------------------------------------------
+If your browser does not open automatically, go to the following URL and login:
+
+    https://production.tuple.app/start?code_challenge=fake0000&onboarding_origin=app&os=linux
+
+After logging in, copy the "authorization code" and run:
+
+    tuple auth AUTHORIZATION_CODE
+
+EOF
+    ;;
+
+  auth)
+    if flag logged_in; then
+      echo "already logged in"
+      exit 0
+    fi
+    echo "auth ${1:-}..."
+    set_flag logged_in
+    ;;
+
+  logout)
+    if flag logged_in; then
+      echo "logout initiated..."
+      clear_flag logged_in
+    else
+      echo "already logged out"
+    fi
+    ;;
+
+  new)
+    if ! flag logged_in; then
+      echo "can't start new call, not logged in (signalerstate=disconnected)"
+      exit 0
+    fi
+    echo "personal url: https://tuple.app/c/ada-personal"
+    echo "starting new call with personal url..."
+    set_flag in_call
+    log "entered room"
+    ;;
+
+  join)
+    url="${1:-}"
+    case "$url" in
+      https://tuple.app/c/*|https://production.tuple.app/c/*) ;;
+      *)
+        echo "error: invalid call url '$url', it must start with 'https://[production.]tuple.app/c/'"
+        exit 0
+        ;;
+    esac
+    require_login
+    if flag in_call; then
+      echo "can't join call, already in a call"
+      exit 0
+    fi
+    echo "joining call..."
+    set_flag in_call
+    log "entered room"
+    ;;
+
+  end)
+    if flag in_call; then
+      echo "ending call..."
+      clear_flag in_call
+      clear_flag sharing
+      log "call ended"
+    else
+      echo "already not in a call"
+    fi
+    ;;
+
+  mute|unmute)
+    if ! flag in_call; then
+      echo "can't $verb, not in a call"
+      exit 0
+    fi
+    if [ "$verb" = "mute" ]; then
+      set_flag muted
+      log "local user ada sending audio: false"
+    else
+      clear_flag muted
+      log "local user ada sending audio: true"
+    fi
+    ;;
+
+  share|unshare)
+    if ! flag in_call; then
+      echo "can't $verb, not in a call"
+      exit 0
+    fi
+    if [ "$verb" = "share" ]; then
+      if flag sharing; then
+        echo "already sharing screen"
+        exit 0
+      fi
+      set_flag sharing
+      log "local user started sharing screen"
+    else
+      clear_flag sharing
+      log "local user stopped sharing screen"
+    fi
+    ;;
+
+  favorite|unfavorite)
+    id="${1:-}"
+    if ! contacts_file | grep -q "^$id|"; then
+      echo "error: no contact with id $id"
+      exit 0
+    fi
+    marker=""
+    [ "$verb" = "favorite" ] && marker=" *"
+    contacts_file | awk -F'|' -v id="$id" -v m="$marker" 'BEGIN { OFS="|" }
+      NF > 1 { if ($1 == id) $5 = m; print }' > "$STATE/contacts.next"
+    mv "$STATE/contacts.next" "$STATE/contacts"
+    printf '%sfavoriting %s...\n' "$([ "$verb" = unfavorite ] && printf un)" "$id"
+    ;;
+
+  on)
+    set_flag daemon
+    ;;
+
+  off)
+    clear_flag daemon
+    echo "exiting"
+    ;;
+
+  *)
+    echo "error: unknown command '$verb'"
+    ;;
+esac

@@ -1,0 +1,338 @@
+#!/usr/bin/env python3
+"""Run the Tuple bar widget outside a Wayland session.
+
+Loads the real plugin entry point together with Omarchy's real Commons/Ui
+components, backed by the minimal Quickshell stand-ins in qsmock/. Processes
+are executed for real, so the panel talks to whichever `tuple` binary is on
+PATH — the official client, or the scripted fake used by the scenario tests.
+
+Examples:
+    main.py --shot panel.png                     # render the dropdown
+    main.py --dump state.json --scenario in-call # assert on observed state
+"""
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parent.parent
+
+sys.path.insert(0, str(HERE))
+
+from PySide6.QtCore import Q_ARG, QMetaObject, QObject, Qt, QTimer, QUrl  # noqa: E402
+from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter  # noqa: E402
+from PySide6.QtQml import QJSValue, QQmlApplicationEngine  # noqa: E402
+
+from qsmock import core, io, wayland  # noqa: E402,F401  (import registers the QML types)
+
+
+def build_import_root(omarchy_shell: Path) -> Path:
+    """Expose Omarchy's Commons/Ui as the `qs.*` module namespace they expect."""
+    root = HERE / ".qsroot"
+    (root / "qs").mkdir(parents=True, exist_ok=True)
+    for name in ("Commons", "Ui"):
+        link = root / "qs" / name
+        target = omarchy_shell / name
+        if not target.is_dir():
+            raise SystemExit(f"missing {target}; pass --omarchy <path to omarchy/shell>")
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(target)
+    return root
+
+
+def find_service(plugin: QObject) -> QObject | None:
+    """The panel's Service child, identified by its API rather than by id."""
+    for child in plugin.findChildren(QObject):
+        meta = child.metaObject()
+        if meta.indexOfProperty("statusSummary") >= 0 and meta.indexOfProperty("clientSettings") >= 0:
+            return child
+    return None
+
+
+def snapshot(plugin: QObject, service: QObject, bar: QObject) -> dict:
+    def prop(obj, name, default=None):
+        value = obj.property(name)
+        # QML `var` properties holding JS values arrive as QJSValue.
+        if isinstance(value, QJSValue):
+            value = value.toVariant()
+        return default if value is None else value
+
+    settings = prop(service, "clientSettings", []) or []
+    rooms = prop(service, "rooms", []) or []
+    contacts = prop(service, "contacts", []) or []
+
+    return {
+        "installed": prop(service, "installed", False),
+        "probed": prop(service, "probed", False),
+        "binaryPath": prop(service, "binaryPath", ""),
+        "clientVersion": prop(service, "clientVersion", ""),
+        "generation": prop(service, "generation", ""),
+        "supportsRooms": prop(service, "supportsRooms", False),
+        "daemonRunning": prop(service, "daemonRunning", False),
+        "loggedIn": prop(service, "loggedIn", False),
+        "awaitingAuthCode": prop(service, "awaitingAuthCode", False),
+        "loginUrl": prop(service, "loginUrl", ""),
+        "inCall": prop(service, "inCall", False),
+        "sharing": prop(service, "sharing", False),
+        "muted": prop(service, "muted", False),
+        "statusSummary": prop(service, "statusSummary", ""),
+        "actionStatus": prop(service, "actionStatus", ""),
+        "lastError": prop(service, "lastError", ""),
+        "installing": prop(service, "installing", False),
+        "installStage": prop(service, "installStage", ""),
+        "installMessage": prop(service, "installMessage", ""),
+        "personalUrl": prop(service, "personalUrl", ""),
+        "contacts": [
+            {"name": c.get("name"), "email": c.get("email"), "status": c.get("status"),
+             "favorite": c.get("favorite"), "selector": c.get("selector"), "initials": c.get("initials")}
+            for c in contacts
+        ],
+        "rooms": [
+            {"name": r.get("name"), "url": r.get("url"), "kind": r.get("kind"),
+             "favorite": r.get("favorite"), "occupants": r.get("occupants")}
+            for r in rooms
+        ],
+        "settings": [
+            {"key": s.get("key"), "value": s.get("value"), "kind": s.get("kind"),
+             "options": s.get("options"), "label": s.get("label")}
+            for s in settings
+        ],
+        "panel": {
+            "opened": prop(plugin, "opened", False),
+            "showSetup": prop(plugin, "showSetup", False),
+            "showSignIn": prop(plugin, "showSignIn", False),
+            "showCall": prop(plugin, "showCall", False),
+            "showRooms": prop(plugin, "showRooms", False),
+            "showPeople": prop(plugin, "showPeople", False),
+            "settingsOpen": prop(plugin, "settingsOpen", False),
+            "focusSection": prop(plugin, "focusSection", ""),
+            "roomIndex": prop(plugin, "roomIndex", 0),
+            "barLabel": prop(plugin, "barLabel", ""),
+        },
+        "pluginSettings": prop(plugin, "settings", {}),
+        "bar": {
+            "writeCount": prop(bar, "writeCount", 0),
+            "lastEntry": prop(bar, "lastEntry", {}),
+        },
+    }
+
+
+def invoke(obj: QObject, name: str, *args):
+    """Call a QML-declared function. Its parameters arrive as QVariant."""
+    return QMetaObject.invokeMethod(
+        obj, name, Qt.DirectConnection, *[Q_ARG("QVariant", arg) for arg in args]
+    )
+
+
+def read(obj: QObject, name: str, default=None):
+    from PySide6.QtQml import QJSValue
+
+    value = obj.property(name)
+    if isinstance(value, QJSValue):
+        value = value.toVariant()
+    return default if value is None else value
+
+
+def apply_step(step: str, plugin: QObject, service: QObject) -> None:
+    """Run one scripted interaction, named the way a user would describe it."""
+    name, _, argument = step.partition(":")
+
+    def entry(collection, key):
+        items = read(service, collection, []) or []
+        if argument.isdigit():
+            index = int(argument)
+            if index >= len(items):
+                raise SystemExit(f"{step}: only {len(items)} {collection}")
+            return items[index]
+        for item in items:
+            if item.get("key") == argument or item.get("name") == argument:
+                return item
+        raise SystemExit(f"{step}: no {collection} matching {argument!r}")
+
+    if name == "refresh":
+        invoke(service, "refresh")
+    elif name == "open":
+        invoke(plugin, "open")
+    elif name == "close":
+        invoke(plugin, "close")
+    elif name == "settings-open":
+        plugin.setProperty("settingsOpen", True)
+    elif name == "add-room-open":
+        plugin.setProperty("addRoomOpen", True)
+    elif name == "login":
+        invoke(service, "beginLogin")
+    elif name == "auth":
+        invoke(service, "submitAuthCode", argument)
+    elif name == "logout":
+        invoke(service, "logout")
+    elif name == "new":
+        invoke(service, "newCall")
+    elif name == "end":
+        invoke(service, "endCall")
+    elif name == "mute":
+        invoke(service, "toggleMute")
+    elif name == "share":
+        invoke(service, "toggleShare")
+    elif name == "daemon-toggle":
+        invoke(service, "stopDaemon" if read(service, "daemonRunning") else "startDaemon")
+    elif name == "call":
+        invoke(service, "callContact", entry("contacts", argument))
+    elif name == "favorite":
+        contact = entry("contacts", argument)
+        invoke(service, "favorite", contact, not contact.get("favorite", False))
+    elif name == "join":
+        invoke(service, "joinUrl", entry("rooms", argument).get("url"), "")
+    elif name == "save-room":
+        url, _, label = argument.partition("|")
+        invoke(service, "saveRoom", url, label)
+    elif name == "forget-room":
+        invoke(service, "forgetRoom", entry("rooms", argument))
+    elif name == "pin-room":
+        invoke(service, "toggleRoomFavorite", entry("rooms", argument))
+    elif name == "toggle-setting":
+        invoke(service, "toggleSetting", entry("clientSettings", argument))
+    elif name == "set-setting":
+        key, _, value = argument.partition("=")
+        invoke(service, "applySetting", entry("clientSettings", key), value)
+    elif name == "install":
+        invoke(service, "install")
+    elif name == "wait":
+        pass
+    else:
+        raise SystemExit(f"unknown step: {step}")
+
+
+def compose(background: str) -> QImage:
+    """Flatten every visible window into one image, largest first."""
+    windows = [w for w in QGuiApplication.topLevelWindows() if w.isVisible()]
+    grabs = []
+    for window in windows:
+        grab = window.grabWindow() if hasattr(window, "grabWindow") else None
+        if grab is not None and not grab.isNull():
+            grabs.append((window, grab))
+    if not grabs:
+        raise SystemExit("nothing visible to capture")
+
+    width = max(w.x() + g.width() for w, g in grabs)
+    height = max(w.y() + g.height() for w, g in grabs)
+    canvas = QImage(width, height, QImage.Format_ARGB32_Premultiplied)
+    canvas.fill(QColor(background))
+
+    painter = QPainter(canvas)
+    for window, grab in sorted(grabs, key=lambda pair: -(pair[1].width() * pair[1].height())):
+        painter.drawImage(window.x(), window.y(), grab)
+    painter.end()
+    return canvas
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--omarchy", default=os.environ.get("OMARCHY_SHELL", "/tmp/omarchy/shell"))
+    parser.add_argument("--plugin", default=str(REPO / "Panel.qml"))
+    parser.add_argument("--settings", default="{}", help="inline widget settings as JSON")
+    parser.add_argument("--shot", help="write a PNG of the rendered bar and panel")
+    parser.add_argument("--dump", help="write observed state as JSON")
+    parser.add_argument("--open", dest="open_panel", action="store_true", default=True)
+    parser.add_argument("--closed", dest="open_panel", action="store_false")
+    parser.add_argument("--settle", type=int, default=2500, help="ms to let the client answer before capturing")
+    parser.add_argument("--background", default="#0b0e12")
+    parser.add_argument("--do", default="", help="comma-separated interactions, e.g. 'call:0,wait:1200,mute'")
+    parser.add_argument("--dump-each", help="directory for a state dump after every interaction")
+    parser.add_argument("--step-delay", type=int, default=900, help="ms between interactions")
+    args = parser.parse_args()
+
+    import_root = build_import_root(Path(args.omarchy).expanduser().resolve())
+
+    app = QGuiApplication(sys.argv[:1])
+    engine = QQmlApplicationEngine()
+    engine.addImportPath(str(import_root))
+    engine.addImportPath(str(HERE / "qml"))
+
+    engine.setInitialProperties({
+        "pluginUrl": QUrl.fromLocalFile(str(Path(args.plugin).resolve())),
+        "pluginSettings": json.loads(args.settings),
+    })
+    engine.load(QUrl.fromLocalFile(str(HERE / "qml" / "Harness.qml")))
+    if not engine.rootObjects():
+        return 2
+
+    harness = engine.rootObjects()[0]
+    status = {"code": 0}
+
+    def capture():
+        plugin = harness.property("plugin")
+        if plugin is None:
+            print("plugin failed to load", file=sys.stderr)
+            status["code"] = 3
+            app.quit()
+            return
+        service = find_service(plugin)
+        if service is None:
+            print("service not found in plugin", file=sys.stderr)
+            status["code"] = 4
+            app.quit()
+            return
+
+        try:
+            if args.dump:
+                state = snapshot(plugin, service, harness.property("barModel"))
+                Path(args.dump).parent.mkdir(parents=True, exist_ok=True)
+                Path(args.dump).write_text(json.dumps(state, indent=2, default=str))
+            if args.shot:
+                Path(args.shot).parent.mkdir(parents=True, exist_ok=True)
+                compose(args.background).save(args.shot)
+        except Exception as error:  # a broken capture must not hang the run
+            import traceback
+            traceback.print_exc()
+            print(f"capture failed: {error}", file=sys.stderr)
+            status["code"] = 5
+        finally:
+            app.quit()
+
+    steps = [step.strip() for step in args.do.split(",") if step.strip()]
+    recorded: list[str] = []
+
+    def run_next():
+        if not steps:
+            QTimer.singleShot(args.step_delay, capture)
+            return
+        step = steps.pop(0)
+        plugin = harness.property("plugin")
+        service = find_service(plugin) if plugin is not None else None
+        if service is None:
+            print("plugin not ready for interactions", file=sys.stderr)
+            status["code"] = 3
+            app.quit()
+            return
+        delay = int(step.partition(":")[2]) if step.startswith("wait:") else args.step_delay
+        apply_step(step, plugin, service)
+
+        def record(index=len(recorded), label=step):
+            if not args.dump_each:
+                return
+            directory = Path(args.dump_each)
+            directory.mkdir(parents=True, exist_ok=True)
+            safe = label.replace("/", "_").replace(":", "-")
+            state = snapshot(plugin, service, harness.property("barModel"))
+            (directory / f"{index:02d}-{safe}.json").write_text(json.dumps(state, indent=2, default=str))
+
+        recorded.append(step)
+        QTimer.singleShot(max(0, delay - 50), record)
+        QTimer.singleShot(delay, run_next)
+
+    if args.open_panel:
+        QTimer.singleShot(args.settle, harness.openPanel)
+        QTimer.singleShot(args.settle + 400, run_next)
+    else:
+        QTimer.singleShot(args.settle, run_next)
+
+    app.exec()
+    return status["code"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

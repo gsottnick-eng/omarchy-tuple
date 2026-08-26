@@ -134,24 +134,53 @@ test("accepts plausible authorization codes and rejects noise", () => {
   assert.equal(Model.isAuthCode("has space"), false)
 })
 
-test("parses a contact list into call targets", () => {
-  const parsed = Model.parseContacts([
-    "  1) Ada Lovelace <ada@example.com> online",
-    "  2) *Grace Hopper <grace@example.com> offline",
-    "  3) Alan Turing <alan@example.com>"
-  ].join("\n"))
+// The client's own format strings, read out of the v2026_08_20.0 binary:
+//   `tuple ls`   -> "  {} {} <{}> [{}]{}"
+//   `tuple call` -> "  {}) {} <{}>"
+const LS_OUTPUT = [
+  "  usr_101 Ada Lovelace <ada@example.com> [online]",
+  "  usr_102 Grace Hopper <grace@example.com> [offline] *",
+  "  usr_103 Alan Turing <alan@example.com> [busy]"
+].join("\n")
+
+const PICKER_OUTPUT = [
+  "  1) Grace Hopper <grace@example.com>",
+  "  2) Ada Lovelace <ada@example.com>",
+  "  3) Alan Turing <alan@example.com>",
+  "error: enter a number starting from 1"
+].join("\n")
+
+test("parses `tuple ls` rows, keeping the id that `tuple favorite` needs", () => {
+  const parsed = Model.parseContacts(LS_OUTPUT)
 
   assert.equal(parsed.loggedIn, true)
   assert.equal(parsed.contacts.length, 3)
-  // The printed number is what `tuple call` reads from stdin, so it must be
-  // preserved rather than recomputed from array position.
-  assert.deepEqual(parsed.contacts.map((c) => c.selector), ["1", "2", "3"])
+  assert.deepEqual(parsed.contacts.map((c) => c.selector), ["usr_101", "usr_102", "usr_103"])
   assert.equal(parsed.contacts[0].name, "Ada Lovelace")
   assert.equal(parsed.contacts[0].initials, "AL")
   assert.equal(parsed.contacts[0].status, "online")
+  assert.equal(parsed.contacts[0].email, "ada@example.com")
   assert.equal(parsed.contacts[1].favorite, true)
-  assert.equal(parsed.contacts[1].name, "Grace Hopper")
-  assert.equal(parsed.contacts[2].status, "")
+  assert.equal(parsed.contacts[2].status, "busy")
+})
+
+test("reads the call number from the picker rather than assuming list order", () => {
+  const entries = Model.parseCallPicker(PICKER_OUTPUT)
+  assert.deepEqual(entries.map((e) => e.number), ["1", "2", "3"])
+
+  const contacts = Model.parseContacts(LS_OUTPUT).contacts
+  // Ada is first in `ls` but second in the picker: the number must come from
+  // the picker or the plugin would call the wrong person.
+  assert.equal(Model.pickerNumberFor(entries, contacts[0]), "2")
+  assert.equal(Model.pickerNumberFor(entries, contacts[1]), "1")
+  assert.equal(Model.pickerNumberFor(entries, { name: "Nobody", email: "" }), "")
+  assert.equal(Model.pickerNumberFor(entries, null), "")
+})
+
+test("falls back to picker rows if that is all it is given", () => {
+  const parsed = Model.parseContacts(PICKER_OUTPUT)
+  assert.equal(parsed.contacts.length, 3)
+  assert.equal(parsed.contacts[0].name, "Grace Hopper")
 })
 
 test("reports the signed-out contact list as signed out", () => {
