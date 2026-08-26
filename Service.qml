@@ -106,6 +106,15 @@ Item {
     if (actionStatus !== "") statusTimer.restart()
   }
 
+  // An in-flight status: it stays until whatever set it clears it, unlike
+  // note(), which is a toast that expires on its own. Stopping the timer is
+  // the point — a note() from moments earlier leaves statusTimer armed, and
+  // when it fires it would wipe this message right after it appeared.
+  function progress(message) {
+    statusTimer.stop()
+    actionStatus = Model.elide(message)
+  }
+
   function reportError(message) {
     lastError = Model.elide(message)
     actionStatus = ""
@@ -188,7 +197,7 @@ Item {
   function newCall() {
     if (!installed) return
     clearFeedback()
-    actionStatus = "Starting a call…"
+    progress("Starting a call…")
     personalProcess.command = command(["new"])
     personalProcess.running = true
   }
@@ -218,7 +227,7 @@ Item {
     }
     clearFeedback()
     pendingCall = contact
-    actionStatus = "Calling " + contact.name + "…"
+    progress("Calling " + contact.name + "…")
     pickerProcess.command = ["sh", "-c", 'printf "" | "$1" call', "sh",
       binaryPath !== "" ? binaryPath : "tuple"]
     pickerProcess.running = true
@@ -244,7 +253,7 @@ Item {
     loginUrl = ""
     awaitingAuthCode = false
     _loginOutput = ""
-    actionStatus = "Starting sign in…"
+    progress("Starting sign in…")
     loginProcess.command = command(["login"])
     loginProcess.running = true
   }
@@ -572,7 +581,7 @@ Item {
     if (parsed.url !== "" && parsed.url !== loginUrl) {
       loginUrl = parsed.url
       awaitingAuthCode = true
-      actionStatus = "Finish signing in in your browser"
+      progress("Finish signing in in your browser")
       openLoginUrl()
     }
     if (parsed.loggedIn) {
