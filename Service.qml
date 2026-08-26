@@ -178,7 +178,18 @@ Item {
       roomsProcess.running = true
     }
     if (!logProcess.running) {
-      logProcess.command = ["sh", "-c", '[ -r "$1" ] && tail -n 300 "$1" || true', "sh", logPath]
+      // Read only what has grown past _logBytesRead; the log's total size
+      // is reported back on stderr, kept separate from the log content
+      // itself so the two never mix on stdout.
+      logProcess.command = ["sh", "-c",
+        'f="$1"; start="$2"; ' +
+        '[ -r "$f" ] || { echo 0 >&2; exit 0; }; ' +
+        'sz=$(wc -c < "$f" 2>/dev/null); ' +
+        'case "$sz" in (""|*[!0-9]*) sz=0 ;; esac; ' +
+        '[ "$sz" -ge "$start" ] || start=0; ' +
+        '[ "$start" -lt "$sz" ] && tail -c "+$((start+1))" "$f"; ' +
+        'echo "$sz" >&2',
+        "sh", logPath, String(_logBytesRead)]
       logProcess.running = true
     }
     if (!audioSinksProcess.running) {
@@ -222,8 +233,15 @@ Item {
   function startDaemon() { runAction(["on"], "Starting Tuple…") }
   function stopDaemon() { runAction(["off"], "Stopping Tuple…") }
   function endCall() { runAction(["end"], "Leaving the call…") }
-  function toggleMute() { runAction([muted ? "unmute" : "mute"], muted ? "Unmuting…" : "Muting…") }
-  function toggleShare() { runAction([sharing ? "unshare" : "share"], sharing ? "Stopping share…" : "Sharing screen…") }
+  function toggleMute() {
+    _pendingToggle = "muted"
+    runAction([muted ? "unmute" : "mute"], muted ? "Unmuting…" : "Muting…")
+  }
+
+  function toggleShare() {
+    _pendingToggle = "sharing"
+    runAction([sharing ? "unshare" : "share"], sharing ? "Stopping share…" : "Sharing screen…")
+  }
   function logout() { runAction(["logout"], "Signing out…") }
   function favorite(contact, on) {
     if (!contact) return
@@ -378,6 +396,27 @@ Item {
 
   property string _loginOutput: ""
 
+  // Set right before toggleMute()/toggleShare() issue their command, and
+  // consumed once by the response that follows. There is no "muted" or
+  // "sharing" case in classifyResponse for a bare success line -- the only
+  // other place either value is ever set is the daemon-log markers below,
+  // and a real client was observed going an entire call without ever
+  // writing the audio-state marker. Without this, "microphone live" can
+  // stay wrong indefinitely regardless of what the user actually does. A
+  // command that neither errors nor reports "not in a call" is trusted to
+  // mean the toggle took effect.
+  property string _pendingToggle: ""
+
+  // Bytes of the daemon log already scanned for call-state markers. Only the
+  // bytes appended since the last poll are read, never a fixed tail window:
+  // a fixed window keeps re-scanning the same already-consumed marker once
+  // nothing newer pushes it out of the window, which can resurrect state
+  // (e.g. "call connected") well after an explicit "end" response already
+  // cleared it -- this is exactly what made a real "Leave the call" click
+  // appear to do nothing. Reset to 0 if the file is ever smaller than what
+  // was already read, which means the daemon restarted and rewrote it.
+  property int _logBytesRead: 0
+
   function _applyCallState(logTail) {
     var derived = Model.deriveCallState(logTail, { inCall: inCall, sharing: sharing, muted: muted })
     inCall = derived.inCall
@@ -387,6 +426,8 @@ Item {
 
   function _handleResponse(raw) {
     var response = Model.classifyResponse(raw)
+    var toggled = _pendingToggle
+    _pendingToggle = ""
     switch (response.kind) {
     case "logged-out":
       loggedIn = false
@@ -422,6 +463,14 @@ Item {
       reportError(response.message)
       return
     }
+    // "ending" and "sharing" already set `sharing` explicitly above; only
+    // apply the optimistic toggle where nothing else already decided it.
+    if (toggled !== "" && response.kind !== "no-call" && response.kind !== "error"
+        && response.kind !== "ending" && response.kind !== "sharing") {
+      if (toggled === "muted") muted = !muted
+      else if (toggled === "sharing") sharing = !sharing
+    }
+
     // A verb that simply worked still prints incidental chatter ("exiting").
     // The label the action already set reads better than echoing that back.
     if (response.kind === "ok" || response.kind === "empty") {
@@ -548,7 +597,12 @@ Item {
   Process {
     id: logProcess
     stdout: StdioCollector { id: logOut; waitForEnd: true }
-    onExited: root._applyCallState(logOut.text)
+    stderr: StdioCollector { id: logSizeOut; waitForEnd: true }
+    onExited: {
+      root._applyCallState(logOut.text)
+      var sz = parseInt(String(logSizeOut.text || "").trim(), 10)
+      if (isFinite(sz) && sz >= 0) root._logBytesRead = sz
+    }
   }
 
   Process {
