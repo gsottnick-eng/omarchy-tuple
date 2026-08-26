@@ -1,4 +1,4 @@
-# Tuple for Omarchy
+# Tuplet
 
 An [Omarchy](https://omarchy.org/) Quattro bar widget for
 [Tuple](https://tuple.app/), the pair-programming app.

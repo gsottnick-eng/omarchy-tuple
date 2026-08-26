@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "id": "io.github.gsottnick-eng.tuple",
-  "name": "Tuple",
+  "name": "Tuplet",
   "version": "1.0.0",
   "author": "Gavin Sottnick",
   "license": "MIT",
-  "description": "Install Tuple and drive pair programming from the Omarchy bar: contacts, rooms, call controls, and every client setting in one dropdown.",
+  "description": "Tuplet installs Tuple and drives pair programming from the Omarchy bar: contacts, rooms, call controls, and every client setting in one dropdown.",
   "kinds": [
     "bar-widget"
   ],
@@ -13,7 +13,7 @@
     "barWidget": "Panel.qml"
   },
   "barWidget": {
-    "displayName": "Tuple",
+    "displayName": "Tuplet",
     "description": "Sign in, call a teammate, join a room, and control screen sharing without leaving the bar.",
     "category": "Communication",
     "allowMultiple": false,
