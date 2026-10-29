@@ -467,8 +467,9 @@ Singleton {
         root._loginText += line + "\n"
         var url = Model.parseLoginUrl(line)
         if (url !== "" && root.loginUrl === "") {
+          // The sign-in section explains the next step itself.
           root.loginUrl = url
-          root.progress("Finish signing in in your browser, then paste the code here")
+          root.status = ""
         }
       }
     }

@@ -21,6 +21,10 @@ rooms, your people, and call controls, one click from the bar.
   your default coding agent, which can find the cause and, with your approval,
   open a pull request or issue here. See [Getting help](#getting-help).
 
+| In a call | Signing in |
+| --- | --- |
+| ![In a call, muted and sharing](screenshots/in-call.png) | ![Pasting the authorization code](screenshots/sign-in.png) |
+
 Nothing is polled: Tuple's client pushes every change, so the widget costs
 nothing while nothing happens. It runs once for all your monitors.
 
