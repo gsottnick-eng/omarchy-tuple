@@ -139,7 +139,12 @@ class TransformWatcher(QObject):
     def _watch(self, item):
         if not isinstance(item, QQuickItem):
             return
-        for signal in (item.xChanged, item.yChanged, item.widthChanged, item.heightChanged):
+        for signal in (
+            item.xChanged,
+            item.yChanged,
+            item.widthChanged,
+            item.heightChanged,
+        ):
             signal.connect(self._bump)
 
     def _bump(self):
@@ -279,6 +284,10 @@ class PanelWindow(QQuickWindow):
             self._applying = False
 
 
+# Commands the plugin asked to run detached, in order; tests assert on these.
+DETACHED = []
+
+
 @QmlElement
 class Singleton(QQuickItem):
     """Quickshell's Singleton: a root for `pragma Singleton` files. An Item
@@ -307,7 +316,7 @@ class Quickshell(QObject):
             command = command.toVariant()
         # Recorded, never run: tests must not raise real notifications or
         # write the developer's clipboard.
-        self.detached.append([str(part) for part in command])
+        DETACHED.append([str(part) for part in command])
 
     @Property("QVariantList", notify=screensChanged)
     def screens(self):

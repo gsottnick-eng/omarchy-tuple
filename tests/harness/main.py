@@ -97,6 +97,7 @@ def snapshot(plugin: QObject, store: QObject) -> dict:
     state["panel"] = {name: read(plugin, name) for name in PANEL_PROPS}
     state["panel"]["rooms"] = read(plugin, "rooms", [])
     state["panel"]["people"] = read(plugin, "people", [])
+    state["detached"] = core.DETACHED
     return state
 
 
@@ -140,6 +141,10 @@ def apply_step(step: str, plugin: QObject, store: QObject) -> None:
         invoke(store, "joinUrl", argument)
     elif name == "search":
         plugin.setProperty("search", argument)
+    elif name == "flag":
+        Path(os.environ["FAKE_TUPLE_STATE"], argument).touch()
+    elif name == "unflag":
+        (Path(os.environ["FAKE_TUPLE_STATE"]) / argument).unlink(missing_ok=True)
     elif name == "wait":
         pass
     else:

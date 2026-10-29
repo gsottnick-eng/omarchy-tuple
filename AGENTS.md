@@ -64,6 +64,10 @@ this plugin is built on. Behaviour that is not obvious from `tuple --help`:
   Share only while `tuple --help` still lists them.
 - The daemon re-executes the binary and keeps its parent's arguments, so it
   appears in `ps` as a second `tuple state follow`.
+- In `rooms list` / `rooms follow` output, `members` is who is in the room
+  right now, not the room's membership; it is `[]` when the room is empty.
+- `active_call` is not occupancy. It can be `false` on an occupied room, and
+  its real meaning is unknown, so the plugin never relies on it.
 
 ## Testing
 

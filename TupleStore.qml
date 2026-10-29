@@ -138,6 +138,8 @@ Singleton {
     if (stoppedByUser) return
     var s = Model.parseState(line)
     if (!s) return
+    var wasInCall = inCall
+    var prevParticipants = participants
     restartTimer.interval = 1000
     daemonRunning = true
     user = s.user
@@ -149,6 +151,22 @@ Singleton {
     version = s.version
     updateVersion = s.updateVersion
     inCall = s.inCall
+    // Mid-call, tell the room who came and went. The call's own start and
+    // end are announced by onInCallChanged, so only diff between two
+    // snapshots that are both inside the same call.
+    if (wasInCall && s.inCall && callAlerts && probed) {
+      var seen = {}
+      prevParticipants.forEach(function(p) { if (p.connected) seen[p.id] = true })
+      var still = {}
+      s.participants.forEach(function(p) {
+        if (!p.connected) return
+        still[p.id] = true
+        if (!seen[p.id]) Quickshell.execDetached(["notify-send", "-a", "Tuple", "-i", "call-start", p.name + " joined the call", ""])
+      })
+      prevParticipants.forEach(function(p) {
+        if (p.connected && !still[p.id]) Quickshell.execDetached(["notify-send", "-a", "Tuple", "-i", "call-stop", p.name + " left the call", ""])
+      })
+    }
     if (loggedIn && loggingIn) {
       loggingIn = false
       loginUrl = ""

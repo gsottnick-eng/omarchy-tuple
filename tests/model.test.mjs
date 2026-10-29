@@ -95,11 +95,37 @@ test("the people list shows everyone in sorted order, and a search narrows it", 
 test("rooms put the personal room first, then favorites, then occupied", () => {
   const rooms = Model.parseRooms(fixture("rooms.json"))
   assert.equal(rooms.length, 5)
-  assert.equal(rooms[0].personal, true)
-  assert.equal(rooms[0].name, "Your room", "the personal room has no name of its own")
-  assert.ok(rooms[1].favorite && rooms[2].favorite)
-  assert.equal(rooms[3].active, true)
+  assert.deepEqual(rooms.map((r) => r.name), [
+    "Your room",
+    "Standup", // occupied favorites first
+    "Pairing", // then the rest of the favorites A to Z
+    "Design Review", // occupied
+    "Incident"
+  ])
   assert.ok(rooms.every((r) => r.url.endsWith("/" + r.slug)))
+})
+
+test("occupants come from members, and active_call alone never makes a room occupied", () => {
+  const rooms = Model.parseRooms(fixture("rooms.json"))
+  const design = rooms.find((r) => r.name === "Design Review")
+  assert.deepEqual(design.occupants.map((o) => o.name), ["Katherine Johnson", "Donald Knuth"])
+  assert.equal(design.active, true)
+  const incident = rooms.find((r) => r.name === "Incident")
+  assert.deepEqual(incident.occupants, [])
+  assert.equal(incident.active, false)
+})
+
+test("occupantsLabel lists up to three names, then counts the rest; self reads as You", () => {
+  const occupants = (names) => names.map((n) => ({ name: n, email: n.split(" ")[0].toLowerCase() + "@example.com" }))
+  const room = (os) => ({ occupants: os })
+  assert.equal(Model.occupantsLabel(room(occupants([])), ""), "")
+  assert.equal(Model.occupantsLabel(room(occupants(["Ada Lovelace", "Grace Hopper"])), ""), "Ada Lovelace, Grace Hopper")
+  const five = occupants(["A", "B", "C", "D", "E"])
+  assert.equal(Model.occupantsLabel(room(five), ""), "A, B, C +2")
+  assert.equal(
+    Model.occupantsLabel(room(occupants(["Ada Lovelace", "Grace Hopper"])), "ada@example.com"),
+    "You, Grace Hopper"
+  )
 })
 
 test("the room list shows every room, and a search narrows it", () => {
