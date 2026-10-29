@@ -1,0 +1,54 @@
+# Opens an issue when Tuple publishes a new Linux client, so Tuplet can be
+# checked against it. Uses the plugin's own installer to ask Tuple's release
+# service, so the endpoint lives in one place.
+name: Tuple release watch
+
+on:
+  schedule:
+    - cron: "17 13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ask Tuple for the latest Linux client
+        id: latest
+        run: |
+          version="$(sh bin/tuple-install --check --json | tail -1 | jq -r '.version // empty')"
+          [ -n "$version" ] || { echo "release service gave no version" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Open an issue for a version not seen before
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          title="Tuple for Linux $VERSION released"
+          # Issues stay as the record of which versions were seen, open or closed.
+          if gh issue list --state all --label tuple-release --limit 200 --json title \
+              --jq '.[].title' | grep -Fxq "$title"; then
+            echo "already tracked: $VERSION"
+            exit 0
+          fi
+          gh label create tuple-release --color 5319e7 \
+            --description "A new Tuple Linux client to check Tuplet against" 2>/dev/null || true
+          gh issue create --title "$title" --label tuple-release --body "$(cat <<EOF
+          Tuple published **$VERSION** of its Linux client.
+
+          To check Tuplet against it (see AGENTS.md):
+
+          - [ ] Install it: \`bin/tuple-install\`, or the panel's update button.
+          - [ ] Compare \`tuple --help\` and the subcommands Tuplet uses with \`tests/fixtures/help.txt\`.
+          - [ ] Check whether \`share\`/\`unshare\`/\`settings\`/\`set\` are still listed.
+          - [ ] Re-capture the JSON shapes Tuplet parses, sanitize them, and update \`tests/fixtures/\` if they changed.
+          - [ ] Re-check the items in \`UPSTREAM.md\` that are waiting on Tuple.
+          - [ ] Run both test suites.
+          EOF
+          )"

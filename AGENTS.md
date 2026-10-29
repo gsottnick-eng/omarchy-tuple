@@ -112,6 +112,9 @@ which shadows Omarchy's in this harness. Quickshell itself is not affected.
   marketplace, where ids are permanent. It changed once before listing, from
   `io.github.gsottnick-eng.tuple`, when the GitHub account was renamed.
 - Bump `version` in `manifest.json` for any change users will receive.
+- Issues labelled `tuple-release` are opened by
+  `.github/workflows/tuple-release-watch.yml` when Tuple ships a new Linux
+  client. Work through their checklist in a PR.
 - Machine-authored pull requests and issues end with
   `Filed by <model name> via <agent harness>.`
 - Bugs in Tuple's client, Hyprland, or Omarchy itself belong upstream. The
