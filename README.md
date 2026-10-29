@@ -65,7 +65,7 @@ Also `share`, `accept`, `join <link>`, `status`, `open`, `close`, and `diagnose`
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/gsottnick-eng/omarchy-tuple.git --enable
+omarchy plugin add https://github.com/gsottnick/omarchy-tuple.git --enable
 ```
 
 The widget lands on the right of the bar. Move it with:
@@ -162,7 +162,7 @@ writes.
 
 Set a default agent first if you haven't: `omarchy default agent <name>`.
 
-You can also [open an issue](https://github.com/gsottnick-eng/omarchy-tuple/issues).
+You can also [open an issue](https://github.com/gsottnick/omarchy-tuple/issues).
 
 ## Development
 
