@@ -26,7 +26,7 @@ sys.path.insert(0, str(HERE))
 
 from PySide6.QtCore import Q_ARG, QMetaObject, QObject, Qt, QTimer, QUrl  # noqa: E402
 from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter  # noqa: E402
-from PySide6.QtQml import QJSValue, QQmlApplicationEngine  # noqa: E402
+from PySide6.QtQml import QJSValue, QQmlApplicationEngine, QQmlEngine, QQmlExpression  # noqa: E402
 
 from qsmock import core, io, wayland  # noqa: E402,F401  (import registers the QML types)
 
@@ -39,7 +39,9 @@ def build_import_root(omarchy_shell: Path) -> Path:
         link = root / "qs" / name
         target = omarchy_shell / name
         if not target.is_dir():
-            raise SystemExit(f"missing {target}; pass --omarchy <path to omarchy/shell>")
+            raise SystemExit(
+                f"missing {target}; pass --omarchy <path to omarchy/shell>"
+            )
         if link.is_symlink() or link.exists():
             link.unlink()
         link.symlink_to(target)
@@ -72,10 +74,31 @@ def apply_theme(theme: Path, font_size: int) -> None:
 
 
 STORE_PROPS = (
-    "probed", "installed", "binaryPath", "canShare", "daemonRunning", "stoppedByUser",
-    "loggedIn", "online", "inCall", "connected", "muted", "sharing", "version",
-    "updateVersion", "loggingIn", "loginUrl", "status", "error", "calling",
-    "installing", "installMessage", "summary",
+    "probed",
+    "installed",
+    "binaryPath",
+    "canShare",
+    "canSettings",
+    "pickerPending",
+    "settings",
+    "daemonRunning",
+    "stoppedByUser",
+    "loggedIn",
+    "online",
+    "inCall",
+    "connected",
+    "muted",
+    "sharing",
+    "version",
+    "updateVersion",
+    "loggingIn",
+    "loginUrl",
+    "status",
+    "error",
+    "calling",
+    "installing",
+    "installMessage",
+    "summary",
 )
 PANEL_PROPS = ("opened", "ready", "ringing", "search", "focusSection", "barText")
 
@@ -108,26 +131,45 @@ def invoke(obj: QObject, name: str, *args):
     )
 
 
-def apply_step(step: str, plugin: QObject, store: QObject) -> None:
+def apply_step(step: str, plugin: QObject, store: QObject, harness=None):
     """Run one scripted interaction, named the way a user would describe it."""
     name, _, argument = step.partition(":")
 
     def entry(collection):
         items = read(store, collection, []) or []
         for item in items:
-            if argument in (item.get("name"), item.get("email"), item.get("slug")) or argument == str(items.index(item)):
+            if argument in (
+                item.get("name"),
+                item.get("email"),
+                item.get("slug"),
+            ) or argument == str(items.index(item)):
                 return item
         raise SystemExit(f"{step}: no {collection} matching {argument!r}")
 
     simple = {
-        "open": (plugin, "open"), "close": (plugin, "close"),
-        "sign-in": (store, "signIn"), "sign-out": (store, "signOut"),
-        "mute": (store, "toggleMute"), "share": (store, "toggleShare"),
-        "leave": (store, "leave"), "accept": (store, "accept"),
-        "start": (store, "start"), "stop": (store, "stop"), "install": (store, "install"),
+        "open": (plugin, "open"),
+        "close": (plugin, "close"),
+        "sign-in": (store, "signIn"),
+        "sign-out": (store, "signOut"),
+        "mute": (store, "toggleMute"),
+        "share": (store, "toggleShare"),
+        "leave": (store, "leave"),
+        "accept": (store, "accept"),
+        "start": (store, "start"),
+        "stop": (store, "stop"),
+        "install": (store, "install"),
         "diagnose": (store, "diagnose"),
     }
-    if name in simple:
+    if name == "share-panel":
+        # QML functions on the panel aren't invokable from Python attributes or
+        # the metaobject; evaluate in the panel's own QML context.
+        expression = QQmlExpression(
+            QQmlEngine.contextForObject(plugin), plugin, "shareFromPanel()"
+        )
+        expression.evaluate()
+        if expression.hasError():
+            print(expression.error(), file=sys.stderr)
+    elif name in simple:
         invoke(*simple[name])
     elif name == "code":
         invoke(store, "submitCode", argument)
@@ -145,6 +187,9 @@ def apply_step(step: str, plugin: QObject, store: QObject) -> None:
         Path(os.environ["FAKE_TUPLE_STATE"], argument).touch()
     elif name == "unflag":
         (Path(os.environ["FAKE_TUPLE_STATE"]) / argument).unlink(missing_ok=True)
+    elif name == "setting":
+        key, _, value = argument.partition("=")
+        invoke(store, "setSetting", key, value)
     elif name == "wait":
         pass
     else:
@@ -168,28 +213,56 @@ def compose(background: str) -> QImage:
     canvas.fill(QColor(background))
 
     painter = QPainter(canvas)
-    for window, grab in sorted(grabs, key=lambda pair: -(pair[1].width() * pair[1].height())):
+    for window, grab in sorted(
+        grabs, key=lambda pair: -(pair[1].width() * pair[1].height())
+    ):
         painter.drawImage(window.x(), window.y(), grab)
     painter.end()
     return canvas
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--omarchy", default=os.environ.get("OMARCHY_SHELL", "/usr/share/omarchy/shell"))
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--omarchy", default=os.environ.get("OMARCHY_SHELL", "/usr/share/omarchy/shell")
+    )
     parser.add_argument("--plugin", default=str(REPO / "Panel.qml"))
-    parser.add_argument("--settings", default="{}", help="inline widget settings as JSON")
+    parser.add_argument(
+        "--settings", default="{}", help="inline widget settings as JSON"
+    )
     parser.add_argument("--shot", help="write a PNG of the rendered bar and panel")
     parser.add_argument("--dump", help="write observed state as JSON")
     parser.add_argument("--open", dest="open_panel", action="store_true", default=True)
     parser.add_argument("--closed", dest="open_panel", action="store_false")
-    parser.add_argument("--settle", type=int, default=2500, help="ms to let the client answer before capturing")
+    parser.add_argument(
+        "--settle",
+        type=int,
+        default=2500,
+        help="ms to let the client answer before capturing",
+    )
     parser.add_argument("--background", default="#0b0e12")
-    parser.add_argument("--theme", help="Omarchy theme name to render with, e.g. tokyo-night")
-    parser.add_argument("--font-size", type=int, default=12, help="Omarchy [font] base-size for --theme runs")
-    parser.add_argument("--do", default="", help="comma-separated interactions, e.g. 'call:0,wait:1200,mute'")
-    parser.add_argument("--dump-each", help="directory for a state dump after every interaction")
-    parser.add_argument("--step-delay", type=int, default=900, help="ms between interactions")
+    parser.add_argument(
+        "--theme", help="Omarchy theme name to render with, e.g. tokyo-night"
+    )
+    parser.add_argument(
+        "--font-size",
+        type=int,
+        default=12,
+        help="Omarchy [font] base-size for --theme runs",
+    )
+    parser.add_argument(
+        "--do",
+        default="",
+        help="comma-separated interactions, e.g. 'call:0,wait:1200,mute'",
+    )
+    parser.add_argument(
+        "--dump-each", help="directory for a state dump after every interaction"
+    )
+    parser.add_argument(
+        "--step-delay", type=int, default=900, help="ms between interactions"
+    )
     args = parser.parse_args()
 
     omarchy_shell = Path(args.omarchy).expanduser().resolve()
@@ -202,11 +275,15 @@ def main() -> int:
     engine.addImportPath(str(import_root))
     engine.addImportPath(str(HERE / "qml"))
 
-    engine.setInitialProperties({
-        "pluginUrl": QUrl.fromLocalFile(str(Path(args.plugin).resolve())),
-        "pluginSettings": json.loads(args.settings),
-    })
-    engine.warnings.connect(lambda warnings: [print(w.toString(), file=sys.stderr) for w in warnings])
+    engine.setInitialProperties(
+        {
+            "pluginUrl": QUrl.fromLocalFile(str(Path(args.plugin).resolve())),
+            "pluginSettings": json.loads(args.settings),
+        }
+    )
+    engine.warnings.connect(
+        lambda warnings: [print(w.toString(), file=sys.stderr) for w in warnings]
+    )
     engine.load(QUrl.fromLocalFile(str(HERE / "qml" / "Harness.qml")))
     if not engine.rootObjects():
         return 2
@@ -233,6 +310,7 @@ def main() -> int:
                 compose(args.background).save(args.shot)
         except Exception as error:  # a broken capture must not hang the run
             import traceback
+
             traceback.print_exc()
             print(f"capture failed: {error}", file=sys.stderr)
             status["code"] = 5
@@ -254,8 +332,10 @@ def main() -> int:
             status["code"] = 3
             app.quit()
             return
-        delay = int(step.partition(":")[2]) if step.startswith("wait:") else args.step_delay
-        apply_step(step, plugin, store)
+        delay = (
+            int(step.partition(":")[2]) if step.startswith("wait:") else args.step_delay
+        )
+        apply_step(step, plugin, store, harness)
 
         def record(index=len(recorded), label=step):
             if not args.dump_each:
@@ -264,7 +344,9 @@ def main() -> int:
             directory.mkdir(parents=True, exist_ok=True)
             safe = label.replace("/", "_").replace(":", "-")
             state = snapshot(plugin, store)
-            (directory / f"{index:02d}-{safe}.json").write_text(json.dumps(state, indent=2, default=str))
+            (directory / f"{index:02d}-{safe}.json").write_text(
+                json.dumps(state, indent=2, default=str)
+            )
 
         recorded.append(step)
 

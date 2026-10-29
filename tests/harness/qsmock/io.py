@@ -173,11 +173,16 @@ class Process(QObject):
         return bytes(data).decode("utf-8", "replace")
 
     def _drain_stdout(self):
+        # A read can still arrive after finalize cleared the process.
+        if self._proc is None:
+            return
         chunk = self._decode(self._proc.readAllStandardOutput())
         if chunk and self._stdout is not None:
             self._stdout.feed(chunk)
 
     def _drain_stderr(self):
+        if self._proc is None:
+            return
         chunk = self._decode(self._proc.readAllStandardError())
         if chunk and self._stderr is not None:
             self._stderr.feed(chunk)

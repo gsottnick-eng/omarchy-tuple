@@ -1,0 +1,12 @@
+#!/bin/sh
+# Fake coredumpctl for tests. With the `xwayland_dead` flag file present in
+# $FAKE_TUPLE_STATE, one crash of Xwayland is reported this session; without
+# it, nothing. Other arguments are accepted and ignored.
+set -eu
+echo "$@" >> "$FAKE_TUPLE_STATE/coredumpctl-ran"
+if [ -f "$FAKE_TUPLE_STATE/xwayland_dead" ]; then
+  printf 'Mon Jan  1 00:00:00 2026 12345  1000  1000   11 SIGSEGV /usr/bin/Xwayland\n'
+else
+  printf 'No coredumps found.\n'
+fi
+exit 0

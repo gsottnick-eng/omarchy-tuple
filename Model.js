@@ -224,6 +224,39 @@ function supportsShare(helpText) {
   return /^\s+share\s/m.test(text(helpText))
 }
 
+// Settings toggles need both verbs: reading the list and writing one value.
+function supportsSettings(helpText) {
+  return /^\s+settings\s/m.test(text(helpText)) && /^\s+set\s/m.test(text(helpText))
+}
+
+// `tuple settings` prints `name | value | description` lines, but the daemon
+// sometimes prefixes its log fields (4 or more `|` fields); keep only setting
+// lines.
+function parseSettings(raw) {
+  var out = {}
+  text(raw).split("\n").forEach(function(l) {
+    var fields = l.split("|")
+    if (fields.length !== 3) return
+    var name = fields[0].trim()
+    if (name !== "") out[name] = fields[1].trim()
+  })
+  return out
+}
+
+// Hyprland's instance signature is `<hash>_<epoch>_<n>`; the middle field is
+// when this compositor session started, in seconds since the epoch. "" when
+// the signature doesn't have that shape.
+function hyprlandEpoch(signature) {
+  var parts = text(signature).split("_")
+  return parts.length === 3 && /^\d+$/.test(parts[1]) ? parts[1] : ""
+}
+
+// A `coredumpctl list` naming Xwayland means it crashed. "No coredumps
+// found." names nothing, so a healthy session reads as false.
+function xwaylandDead(output) {
+  return text(output).split("\n").some(function(l) { return l.indexOf("Xwayland") !== -1 })
+}
+
 function parseInstallEvent(line) {
   var event = parseJson(line)
   if (!event || typeof event !== "object" || typeof event.stage !== "string") return null
