@@ -97,11 +97,17 @@ test("rooms put the personal room first, then favorites, then occupied", () => {
   assert.equal(rooms.length, 5)
   assert.deepEqual(rooms.map((r) => r.name), [
     "Your room",
-    "Standup", // occupied favorites first
-    "Pairing", // then the rest of the favorites A to Z
+    "Pairing", // favorites A to Z, even when one of them is occupied
+    "Standup",
     "Design Review", // occupied
     "Incident"
   ])
+  const standup = rooms.find((r) => r.name === "Standup")
+  assert.ok(standup.favorite && standup.active, "Standup is an occupied favorite")
+  assert.ok(
+    rooms.indexOf(standup) > rooms.indexOf(rooms.find((r) => r.name === "Pairing")),
+    "an occupied favorite does not jump its fellow favorites"
+  )
   assert.ok(rooms.every((r) => r.url.endsWith("/" + r.slug)))
 })
 

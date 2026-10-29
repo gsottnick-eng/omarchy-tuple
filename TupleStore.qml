@@ -139,7 +139,6 @@ Singleton {
     var s = Model.parseState(line)
     if (!s) return
     var wasInCall = inCall
-    var prevParticipants = participants
     restartTimer.interval = 1000
     daemonRunning = true
     user = s.user
@@ -151,21 +150,21 @@ Singleton {
     version = s.version
     updateVersion = s.updateVersion
     inCall = s.inCall
-    // Mid-call, tell the room who came and went. The call's own start and
-    // end are announced by onInCallChanged, so only diff between two
-    // snapshots that are both inside the same call.
-    if (wasInCall && s.inCall && callAlerts && probed) {
-      var seen = {}
-      prevParticipants.forEach(function(p) { if (p.connected) seen[p.id] = true })
-      var still = {}
-      s.participants.forEach(function(p) {
-        if (!p.connected) return
-        still[p.id] = true
-        if (!seen[p.id]) Quickshell.execDetached(["notify-send", "-a", "Tuple", "-i", "call-start", p.name + " joined the call", ""])
-      })
-      prevParticipants.forEach(function(p) {
-        if (p.connected && !still[p.id]) Quickshell.execDetached(["notify-send", "-a", "Tuple", "-i", "call-stop", p.name + " left the call", ""])
-      })
+    // Mid-call, tell the room who came and went — but only once the change
+    // has held long enough not to be a network blip (see participantDebounce).
+    // The call's own start and end are announced by onInCallChanged.
+    if (s.inCall && !wasInCall) {
+      // Everyone already in the call as it starts is announced, not reported.
+      announcedParticipants = s.participants.filter(function(p) { return p.connected })
+      pendingParticipants = null
+      participantDebounce.stop()
+    } else if (wasInCall && s.inCall) {
+      pendingParticipants = s.participants.filter(function(p) { return p.connected })
+      participantDebounce.restart()
+    } else if (!s.inCall) {
+      announcedParticipants = []
+      pendingParticipants = null
+      participantDebounce.stop()
     }
     if (loggedIn && loggingIn) {
       loggingIn = false
@@ -342,6 +341,34 @@ Singleton {
   property string _loginText: ""
   property string _authCode: ""
   property bool _updating: false
+
+  // Who we last announced as in the call, and who is waiting to be announced.
+  // A change is reported only after it has held for three seconds, so a
+  // network blip that flips `connected` away and back says nothing.
+  property var announcedParticipants: []
+  property var pendingParticipants: null
+  Timer {
+    id: participantDebounce
+    interval: 3000
+    onTriggered: {
+      var pending = root.pendingParticipants
+      root.pendingParticipants = null
+      if (pending === null || !root.inCall) return
+      var announced = {}
+      root.announcedParticipants.forEach(function(p) { announced[p.id] = true })
+      var now = {}
+      pending.forEach(function(p) { now[p.id] = true })
+      if (root.callAlerts && root.probed) {
+        pending.forEach(function(p) {
+          if (!announced[p.id]) Quickshell.execDetached(["notify-send", "-a", "Tuple", "-i", "call-start", p.name + " joined the call", ""])
+        })
+        root.announcedParticipants.forEach(function(p) {
+          if (!now[p.id]) Quickshell.execDetached(["notify-send", "-a", "Tuple", "-i", "call-stop", p.name + " left the call", ""])
+        })
+      }
+      root.announcedParticipants = pending
+    }
+  }
 
   onInCallChanged: {
     if (inCall) {

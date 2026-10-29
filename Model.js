@@ -166,8 +166,9 @@ function parseRooms(raw) {
   })
   return out.sort(function(a, b) {
     if (a.personal !== b.personal) return a.personal ? -1 : 1
+    // Favorites stay A to Z whoever is in them; occupancy only orders the rest.
     if (a.favorite !== b.favorite) return a.favorite ? -1 : 1
-    if (a.active !== b.active) return a.active ? -1 : 1
+    if (!a.favorite && a.active !== b.active) return a.active ? -1 : 1
     return a.name.localeCompare(b.name)
   })
 }

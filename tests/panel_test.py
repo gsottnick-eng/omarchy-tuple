@@ -171,7 +171,7 @@ class PanelTest(unittest.TestCase):
 
     def test_a_call_announces_when_someone_joins_or_leaves(self):
         harness = self.harness(logged_in=True, in_call=True, flags=("muted",))
-        harness.run(["wait:200", "flag:guest", "wait:800", "unflag:guest", "wait:800"])
+        harness.run(["wait:200", "flag:guest", "wait:3500", "unflag:guest", "wait:3500"])
 
         def alerts(snapshot):
             return " ".join(" ".join(cmd) for cmd in snapshot["detached"])
@@ -180,6 +180,15 @@ class PanelTest(unittest.TestCase):
         self.assertIn("Grace Hopper joined the call", alerts(joined))
         self.assertIn("Grace Hopper left the call", alerts(left))
         self.assertNotIn("Katherine Johnson", alerts(harness.final))
+
+    def test_a_brief_disconnect_announces_nothing(self):
+        # A network blip flips `connected` away and back within the debounce
+        # window, so neither a leave nor a join is announced.
+        harness = self.harness(logged_in=True, in_call=True, flags=("muted",))
+        harness.run(["wait:200", "flag:guest", "wait:500", "unflag:guest", "wait:3500"])
+        alerts = " ".join(" ".join(cmd) for cmd in harness.final["detached"])
+        self.assertNotIn("Grace Hopper joined the call", alerts)
+        self.assertNotIn("Grace Hopper left the call", alerts)
 
     def test_calling_someone_uses_their_email_and_the_call_shows_up(self):
         harness = self.harness(logged_in=True)
