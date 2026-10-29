@@ -1,4 +1,0 @@
-17:00:28.608|8245|8245|info|connect failed with ConnectionRefused
-17:00:28.608|8245|8245|info|log path '/home/ubuntu/.local/share/tuple/0/log.txt'
-17:00:28.608|8245|8245|info|created daemon process (pid=8246)
-not logged in

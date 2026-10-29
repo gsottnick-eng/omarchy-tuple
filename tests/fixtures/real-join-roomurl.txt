@@ -1,1 +1,0 @@
-error: invalid call url 'https://tuple.app/room/abc', it must start with 'https://[production.]tuple.app/c/'

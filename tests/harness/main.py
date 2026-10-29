@@ -4,11 +4,12 @@
 Loads the real plugin entry point together with Omarchy's real Commons/Ui
 components, backed by the minimal Quickshell stand-ins in qsmock/. Processes
 are executed for real, so the panel talks to whichever `tuple` binary is on
-PATH — the official client, or the scripted fake used by the scenario tests.
+PATH: the scripted fake in tests/fake-tuple for tests, never a real account
+in a loop.
 
 Examples:
-    main.py --shot panel.png                     # render the dropdown
-    main.py --dump state.json --scenario in-call # assert on observed state
+    main.py --shot panel.png --theme tokyo-night        # render the dropdown
+    main.py --dump state.json --do 'call:Grace Hopper'  # drive it, then read state
 """
 
 import argparse
@@ -42,6 +43,12 @@ def build_import_root(omarchy_shell: Path) -> Path:
         if link.is_symlink() or link.exists():
             link.unlink()
         link.symlink_to(target)
+    # A system-wide Quickshell install puts its real modules on Qt's import
+    # path; these plugin-less qmldirs win, so the qsmock registrations are used.
+    for module in ("Quickshell", "Quickshell.Io", "Quickshell.Wayland"):
+        directory = root.joinpath(*module.split("."))
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "qmldir").write_text(f"module {module}\n")
     return root
 
 
@@ -64,90 +71,33 @@ def apply_theme(theme: Path, font_size: int) -> None:
     os.environ["HOME"] = str(home)
 
 
-def find_service(plugin: QObject) -> QObject | None:
-    """The panel's Service child, identified by its API rather than by id."""
-    for child in plugin.findChildren(QObject):
-        meta = child.metaObject()
-        if meta.indexOfProperty("statusSummary") >= 0 and meta.indexOfProperty("clientSettings") >= 0:
-            return child
-    return None
+STORE_PROPS = (
+    "probed", "installed", "binaryPath", "canShare", "daemonRunning", "stoppedByUser",
+    "loggedIn", "online", "inCall", "connected", "muted", "sharing", "version",
+    "updateVersion", "loggingIn", "loginUrl", "status", "error", "calling",
+    "installing", "installMessage", "summary",
+)
+PANEL_PROPS = ("opened", "ready", "ringing", "search", "focusSection", "barText")
 
 
-def snapshot(plugin: QObject, service: QObject, bar: QObject) -> dict:
-    def prop(obj, name, default=None):
-        value = obj.property(name)
-        # QML `var` properties holding JS values arrive as QJSValue.
-        if isinstance(value, QJSValue):
-            value = value.toVariant()
-        return default if value is None else value
+def read(obj: QObject, name: str, default=None):
+    value = obj.property(name)
+    # QML `var` properties holding JS values arrive as QJSValue.
+    if isinstance(value, QJSValue):
+        value = value.toVariant()
+    return default if value is None else value
 
-    settings = prop(service, "clientSettings", []) or []
-    audio_outputs = prop(service, "audioOutputs", []) or []
-    audio_inputs = prop(service, "audioInputs", []) or []
-    rooms = prop(service, "rooms", []) or []
-    contacts = prop(service, "contacts", []) or []
 
-    return {
-        "installed": prop(service, "installed", False),
-        "probed": prop(service, "probed", False),
-        "binaryPath": prop(service, "binaryPath", ""),
-        "clientVersion": prop(service, "clientVersion", ""),
-        "generation": prop(service, "generation", ""),
-        "supportsRooms": prop(service, "supportsRooms", False),
-        "daemonRunning": prop(service, "daemonRunning", False),
-        "loggedIn": prop(service, "loggedIn", False),
-        "awaitingAuthCode": prop(service, "awaitingAuthCode", False),
-        "loginUrl": prop(service, "loginUrl", ""),
-        "inCall": prop(service, "inCall", False),
-        "sharing": prop(service, "sharing", False),
-        "muted": prop(service, "muted", False),
-        "statusSummary": prop(service, "statusSummary", ""),
-        "actionStatus": prop(service, "actionStatus", ""),
-        "lastError": prop(service, "lastError", ""),
-        "installing": prop(service, "installing", False),
-        "installStage": prop(service, "installStage", ""),
-        "installMessage": prop(service, "installMessage", ""),
-        "personalUrl": prop(service, "personalUrl", ""),
-        "audioAvailable": prop(service, "audioAvailable", False),
-        "audioOutput": prop(service, "audioOutput", ""),
-        "audioInput": prop(service, "audioInput", ""),
-        "audioOutputs": [{"name": d.get("name"), "label": d.get("label")} for d in audio_outputs],
-        "audioInputs": [{"name": d.get("name"), "label": d.get("label")} for d in audio_inputs],
-        "contacts": [
-            {"name": c.get("name"), "email": c.get("email"), "status": c.get("status"),
-             "favorite": c.get("favorite"), "selector": c.get("selector"), "initials": c.get("initials")}
-            for c in contacts
-        ],
-        "rooms": [
-            {"name": r.get("name"), "url": r.get("url"), "kind": r.get("kind"),
-             "favorite": r.get("favorite"), "occupants": r.get("occupants")}
-            for r in rooms
-        ],
-        "settings": [
-            {"key": s.get("key"), "value": s.get("value"), "kind": s.get("kind"),
-             "options": s.get("options"), "label": s.get("label")}
-            for s in settings
-        ],
-        "panel": {
-            "opened": prop(plugin, "opened", False),
-            "showSetup": prop(plugin, "showSetup", False),
-            "showSignIn": prop(plugin, "showSignIn", False),
-            "showCall": prop(plugin, "showCall", False),
-            "showRooms": prop(plugin, "showRooms", False),
-            "showPeople": prop(plugin, "showPeople", False),
-            "showAudio": prop(plugin, "showAudio", False),
-            "settingsOpen": prop(plugin, "settingsOpen", False),
-            "focusSection": prop(plugin, "focusSection", ""),
-            "roomIndex": prop(plugin, "roomIndex", 0),
-            "barLabel": prop(plugin, "barLabel", ""),
-            "barText": prop(plugin, "barText", ""),
-        },
-        "pluginSettings": prop(plugin, "settings", {}),
-        "bar": {
-            "writeCount": prop(bar, "writeCount", 0),
-            "lastEntry": prop(bar, "lastEntry", {}),
-        },
-    }
+def snapshot(plugin: QObject, store: QObject) -> dict:
+    state = {name: read(store, name) for name in STORE_PROPS}
+    state["user"] = read(store, "user")
+    state["participants"] = read(store, "participants", [])
+    state["contacts"] = read(store, "contacts", [])
+    state["rooms"] = read(store, "rooms", [])
+    state["panel"] = {name: read(plugin, name) for name in PANEL_PROPS}
+    state["panel"]["rooms"] = read(plugin, "rooms", [])
+    state["panel"]["people"] = read(plugin, "people", [])
+    return state
 
 
 def invoke(obj: QObject, name: str, *args):
@@ -157,82 +107,39 @@ def invoke(obj: QObject, name: str, *args):
     )
 
 
-def read(obj: QObject, name: str, default=None):
-    from PySide6.QtQml import QJSValue
-
-    value = obj.property(name)
-    if isinstance(value, QJSValue):
-        value = value.toVariant()
-    return default if value is None else value
-
-
-def apply_step(step: str, plugin: QObject, service: QObject) -> None:
+def apply_step(step: str, plugin: QObject, store: QObject) -> None:
     """Run one scripted interaction, named the way a user would describe it."""
     name, _, argument = step.partition(":")
 
-    def entry(collection, key):
-        items = read(service, collection, []) or []
-        if argument.isdigit():
-            index = int(argument)
-            if index >= len(items):
-                raise SystemExit(f"{step}: only {len(items)} {collection}")
-            return items[index]
+    def entry(collection):
+        items = read(store, collection, []) or []
         for item in items:
-            if item.get("key") == argument or item.get("name") == argument:
+            if argument in (item.get("name"), item.get("email"), item.get("slug")) or argument == str(items.index(item)):
                 return item
         raise SystemExit(f"{step}: no {collection} matching {argument!r}")
 
-    if name == "refresh":
-        invoke(service, "refresh")
-    elif name == "open":
-        invoke(plugin, "open")
-    elif name == "close":
-        invoke(plugin, "close")
-    elif name == "cycle-output":
-        invoke(service, "cycleAudioOutput")
-    elif name == "cycle-input":
-        invoke(service, "cycleAudioInput")
-    elif name == "settings-open":
-        plugin.setProperty("settingsOpen", True)
-    elif name == "add-room-open":
-        plugin.setProperty("addRoomOpen", True)
-    elif name == "login":
-        invoke(service, "beginLogin")
-    elif name == "auth":
-        invoke(service, "submitAuthCode", argument)
-    elif name == "logout":
-        invoke(service, "logout")
-    elif name == "new":
-        invoke(service, "newCall")
-    elif name == "end":
-        invoke(service, "endCall")
-    elif name == "mute":
-        invoke(service, "toggleMute")
-    elif name == "share":
-        invoke(service, "toggleShare")
-    elif name == "daemon-toggle":
-        invoke(service, "stopDaemon" if read(service, "daemonRunning") else "startDaemon")
+    simple = {
+        "open": (plugin, "open"), "close": (plugin, "close"),
+        "sign-in": (store, "signIn"), "sign-out": (store, "signOut"),
+        "mute": (store, "toggleMute"), "share": (store, "toggleShare"),
+        "leave": (store, "leave"), "accept": (store, "accept"),
+        "start": (store, "start"), "stop": (store, "stop"), "install": (store, "install"),
+        "diagnose": (store, "diagnose"),
+    }
+    if name in simple:
+        invoke(*simple[name])
+    elif name == "code":
+        invoke(store, "submitCode", argument)
     elif name == "call":
-        invoke(service, "callContact", entry("contacts", argument))
+        invoke(store, "callPerson", entry("contacts"))
     elif name == "favorite":
-        contact = entry("contacts", argument)
-        invoke(service, "favorite", contact, not contact.get("favorite", False))
+        invoke(store, "favoritePerson", entry("contacts"))
     elif name == "join":
-        invoke(service, "joinUrl", entry("rooms", argument).get("url"), "")
-    elif name == "save-room":
-        url, _, label = argument.partition("|")
-        invoke(service, "saveRoom", url, label)
-    elif name == "forget-room":
-        invoke(service, "forgetRoom", entry("rooms", argument))
-    elif name == "pin-room":
-        invoke(service, "toggleRoomFavorite", entry("rooms", argument))
-    elif name == "toggle-setting":
-        invoke(service, "toggleSetting", entry("clientSettings", argument))
-    elif name == "set-setting":
-        key, _, value = argument.partition("=")
-        invoke(service, "applySetting", entry("clientSettings", key), value)
-    elif name == "install":
-        invoke(service, "install")
+        invoke(store, "joinRoom", entry("rooms"))
+    elif name == "join-url":
+        invoke(store, "joinUrl", argument)
+    elif name == "search":
+        plugin.setProperty("search", argument)
     elif name == "wait":
         pass
     else:
@@ -264,7 +171,7 @@ def compose(background: str) -> QImage:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--omarchy", default=os.environ.get("OMARCHY_SHELL", "/tmp/omarchy/shell"))
+    parser.add_argument("--omarchy", default=os.environ.get("OMARCHY_SHELL", "/usr/share/omarchy/shell"))
     parser.add_argument("--plugin", default=str(REPO / "Panel.qml"))
     parser.add_argument("--settings", default="{}", help="inline widget settings as JSON")
     parser.add_argument("--shot", help="write a PNG of the rendered bar and panel")
@@ -294,6 +201,7 @@ def main() -> int:
         "pluginUrl": QUrl.fromLocalFile(str(Path(args.plugin).resolve())),
         "pluginSettings": json.loads(args.settings),
     })
+    engine.warnings.connect(lambda warnings: [print(w.toString(), file=sys.stderr) for w in warnings])
     engine.load(QUrl.fromLocalFile(str(HERE / "qml" / "Harness.qml")))
     if not engine.rootObjects():
         return 2
@@ -308,16 +216,11 @@ def main() -> int:
             status["code"] = 3
             app.quit()
             return
-        service = find_service(plugin)
-        if service is None:
-            print("service not found in plugin", file=sys.stderr)
-            status["code"] = 4
-            app.quit()
-            return
+        store = harness.property("store")
 
         try:
             if args.dump:
-                state = snapshot(plugin, service, harness.property("barModel"))
+                state = snapshot(plugin, store)
                 Path(args.dump).parent.mkdir(parents=True, exist_ok=True)
                 Path(args.dump).write_text(json.dumps(state, indent=2, default=str))
             if args.shot:
@@ -340,14 +243,14 @@ def main() -> int:
             return
         step = steps.pop(0)
         plugin = harness.property("plugin")
-        service = find_service(plugin) if plugin is not None else None
-        if service is None:
+        store = harness.property("store")
+        if plugin is None or store is None:
             print("plugin not ready for interactions", file=sys.stderr)
             status["code"] = 3
             app.quit()
             return
         delay = int(step.partition(":")[2]) if step.startswith("wait:") else args.step_delay
-        apply_step(step, plugin, service)
+        apply_step(step, plugin, store)
 
         def record(index=len(recorded), label=step):
             if not args.dump_each:
@@ -355,7 +258,7 @@ def main() -> int:
             directory = Path(args.dump_each)
             directory.mkdir(parents=True, exist_ok=True)
             safe = label.replace("/", "_").replace(":", "-")
-            state = snapshot(plugin, service, harness.property("barModel"))
+            state = snapshot(plugin, store)
             (directory / f"{index:02d}-{safe}.json").write_text(json.dumps(state, indent=2, default=str))
 
         recorded.append(step)

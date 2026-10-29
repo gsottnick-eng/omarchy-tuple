@@ -8,7 +8,6 @@ accepted and ignored.
 """
 
 import os
-import subprocess
 
 from PySide6.QtCore import Property, QObject, QPointF, QRect, Qt, Signal, Slot
 from PySide6.QtGui import QGuiApplication
@@ -281,6 +280,12 @@ class PanelWindow(QQuickWindow):
 
 
 @QmlElement
+class Singleton(QQuickItem):
+    """Quickshell's Singleton: a root for `pragma Singleton` files. An Item
+    here only for its default property, which holds the declared children."""
+
+
+@QmlElement
 @QmlSingleton
 class Quickshell(QObject):
     screensChanged = Signal()
@@ -300,12 +305,9 @@ class Quickshell(QObject):
 
         if isinstance(command, QJSValue):
             command = command.toVariant()
-        argv = [str(part) for part in command]
-        self.detached.append(argv)
-        try:
-            subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except OSError:
-            pass
+        # Recorded, never run: tests must not raise real notifications or
+        # write the developer's clipboard.
+        self.detached.append([str(part) for part in command])
 
     @Property("QVariantList", notify=screensChanged)
     def screens(self):

@@ -1,8 +1,0 @@
-17:00:28.608|8245|8245|info|connect failed with ConnectionRefused
-17:00:28.608|8245|8245|info|log path '/home/ubuntu/.local/share/tuple/0/log.txt'
-17:00:28.608|8245|8245|info|created daemon process (pid=8246)
-overlay | 1 | Show "overlay" annotation window when sharing screen (0|1)
-start-calls-muted | 0 | Start with microphone muted when joining a call (0|1)
-capture | auto | Screen capture mechanism (auto|x11|portal)
-guest-mode | annotation | Current mode in screen window (annotation|control)
-transcription-model |  | File path to whisper ggml model

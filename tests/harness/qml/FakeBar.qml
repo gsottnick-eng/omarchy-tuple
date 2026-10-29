@@ -2,8 +2,8 @@ import QtQuick
 import qs.Commons
 
 // The slice of Omarchy's bar API that a bar widget and its popup panel touch.
-// Real behaviour where the plugin depends on it (popout ownership, inline
-// settings persistence); inert acknowledgement everywhere else.
+// Real behaviour where the panel depends on it (popout ownership); inert
+// acknowledgement everywhere else.
 QtObject {
   id: bar
 
@@ -19,21 +19,6 @@ QtObject {
 
   property var activePopout: null
   property var clickTargets: []
-
-  // Records what the widget wrote back, so a test can assert that saved rooms
-  // actually round-trip through shell.json rather than living in memory.
-  property int writeCount: 0
-  property var lastEntry: ({})
-
-  property QtObject shell: QtObject {
-    function updateEntryInline(moduleName, entry) {
-      bar.lastEntry = entry
-      bar.writeCount += 1
-      bar.entryWritten(moduleName, entry)
-    }
-  }
-
-  signal entryWritten(string moduleName, var entry)
 
   function requestPopout(key) { activePopout = key }
   function releasePopout(key) { if (activePopout === key) activePopout = null }

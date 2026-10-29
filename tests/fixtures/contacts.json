@@ -1,0 +1,87 @@
+[
+  {
+    "id": 1003,
+    "email": "grace@example.com",
+    "full_name": "Grace Hopper",
+    "short_name": "Grace",
+    "kind": "teammate",
+    "favorited": true,
+    "recent": false,
+    "status": "online"
+  },
+  {
+    "id": 1004,
+    "email": "katherine@example.com",
+    "full_name": "Katherine Johnson",
+    "short_name": "Katherine",
+    "kind": "teammate",
+    "favorited": true,
+    "recent": false,
+    "status": "busy",
+    "call": {
+      "id": "00000000-0000-4000-8000-000000001005",
+      "participant_ids": [
+        1006
+      ],
+      "capacity": 9,
+      "sfu_backed": false,
+      "joinable": true
+    }
+  },
+  {
+    "id": 1007,
+    "email": "linus@example.com",
+    "full_name": "Linus Pauling",
+    "short_name": "Linus",
+    "kind": "teammate",
+    "favorited": true,
+    "recent": true,
+    "status": "busy",
+    "call": {
+      "id": "00000000-0000-4000-8000-000000001008",
+      "participant_ids": [],
+      "capacity": 9,
+      "sfu_backed": false,
+      "joinable": true
+    }
+  },
+  {
+    "id": 1009,
+    "email": "barbara@example.com",
+    "full_name": "Barbara Liskov",
+    "short_name": "Barbara",
+    "kind": "teammate",
+    "favorited": true,
+    "recent": true,
+    "status": "busy",
+    "call": {
+      "id": "00000000-0000-4000-8000-000000001010",
+      "participant_ids": [
+        1011
+      ],
+      "capacity": 9,
+      "sfu_backed": false,
+      "joinable": true
+    }
+  },
+  {
+    "id": 1012,
+    "email": "edsger@example.com",
+    "full_name": "Edsger Dijkstra",
+    "short_name": "Edsger",
+    "kind": "teammate",
+    "favorited": false,
+    "recent": false,
+    "status": "unknown"
+  },
+  {
+    "id": 1013,
+    "email": "frances@example.com",
+    "full_name": "Frances Allen",
+    "short_name": "Frances",
+    "kind": "teammate",
+    "favorited": false,
+    "recent": false,
+    "status": "unknown"
+  }
+]

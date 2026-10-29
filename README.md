@@ -1,73 +1,61 @@
 # Tuplet
 
-An [Omarchy](https://omarchy.org/) Quattro bar widget for
-[Tuple](https://tuple.app/), the pair-programming app.
+Tuple, the pair-programming app, in the Omarchy bar. Tuplet installs Tuple's
+Linux client for you and gives it the dropdown it doesn't ship with: your
+rooms, your people, and call controls, one click from the bar.
 
-Tuple's Linux client is command-line only — no tray icon, no window. This
-plugin installs that client for you and gives it the dropdown it does not ship
-with: who is online, one-click calling, saved rooms, call controls, and the
-client's own settings, all from the bar.
-
-<p align="center">
-  <img src="preview.png" alt="The Tuple panel open on the Omarchy bar" width="430">
-</p>
+![The Tuplet dropdown](preview.png)
 
 ## Features
 
-- **Bar** — a Tuple glyph that reflects the current state, optionally with a
-  label reading `Sign in`, `In call`, or `Sharing`.
-- **Contacts** — your Tuple contacts with online status and favourites. Click
-  one to call.
-- **Rooms** — save room URLs and rejoin them in one click. The Linux client has
-  no room list of its own, so the plugin remembers them for you.
-- **Call controls** — mute and screen sharing while you are in a call, plus
-  right-click the bar icon to toggle mute without opening the panel.
-- **Client settings** — every setting the Tuple client exposes, each rendered
-  with the control its allowed values imply: a switch for on/off settings, a
-  cycle button for enumerated ones, a text field for the rest. Settings sit
-  directly below the header, since they are the first thing wanted after
-  installing.
-- **Audio devices** — pick the output and microphone without leaving the
-  panel. Tuple's Linux client has no audio settings of its own, so this
-  changes PipeWire's default device, via `pactl`. The section hides itself if
-  `pactl` is not installed.
-- **Call alerts** — a desktop notification and a sound when a call starts or
-  ends. The Linux client is silent about both, which makes it easy to miss
-  that a call connected. Turn it off in the plugin's settings.
-- **Sign in and out** — the device-code login flow, without the terminal.
+- **Rooms**: your room, favorite rooms, and any room in use, one click to join.
+- **People**: favorites and anyone online or in a call. Click to call them, or
+  to join the call they're in.
+- **Search**: one field finds any room or person. Paste a call link into it
+  and press Enter to join.
+- **Calls**: mute, share your screen, leave, and answer incoming calls. The bar
+  icon shows when you're in a call and muted.
+- **Install and update**: downloads the official client and checks it against
+  Tuple's published checksum. Offers updates when Tuple releases one.
+- **Diagnose with my agent**: the bug button in the panel hands a problem to
+  your default coding agent, which can find the cause and, with your approval,
+  open a pull request or issue here. See [Getting help](#getting-help).
+
+Nothing is polled: Tuple's client pushes every change, so the widget costs
+nothing while nothing happens. It runs once for all your monitors.
 
 ### Keyboard
 
-With the panel open:
+With the dropdown open:
 
 | Key | Action |
 | --- | --- |
-| `n` | Start a new call |
-| `m` | Toggle mute (in a call) |
-| `s` | Toggle screen sharing (in a call) |
-| `e` | End the call |
-| `a` | Add a room |
-| `o` | Switch audio output |
-| `i` | Switch microphone |
-| `r` | Refresh |
-| `,` | Open settings |
-| `Esc` | Close the panel |
-| `Tab` / `Shift-Tab` | Move to the neighbouring panel |
+| Arrows, Enter | Move through rooms and people, join or call |
+| `/` | Search |
+| `m` | Mute or unmute |
+| `s` | Share or stop sharing your screen |
+| `l` | Leave the call |
+| `a` | Answer an incoming call |
+| Esc | Close |
 
-Arrow keys move the selection and `Enter` activates it. Letter keys are
-suspended while a text field has focus, so typing a room URL or an auth code
-does what you expect.
+Right-click the bar icon during a call to mute.
+
+### Bind keys to calls
+
+```bash
+omarchy-shell io.github.gsottnick-eng.tuple mute
+omarchy-shell io.github.gsottnick-eng.tuple leave
+omarchy-shell io.github.gsottnick-eng.tuple toggle
+```
+
+Also `share`, `accept`, `join <link>`, `status`, `open`, `close`, and `diagnose`.
 
 ## Requirements
 
-- Omarchy with the **Quattro** shell.
-- `curl`, and either `sha256sum` or `shasum` — both standard on Omarchy.
-- Optional: `pactl` (PipeWire) for audio device selection, and `notify-send`
-  for call alerts. Both ship with Omarchy; without them those features simply
-  do not appear.
-- A Tuple account. Tuple is a paid product and its Linux client is in alpha.
-- No manual Tuple install: the plugin installs the official client for you, as
-  described below.
+- Omarchy with the Quickshell bar.
+- x86_64 or arm64.
+- `curl` and `sha256sum` to install the client, both part of Omarchy.
+- A Tuple account.
 
 ## Install
 
@@ -81,48 +69,46 @@ The widget lands on the right of the bar. Move it with:
 omarchy bar move io.github.gsottnick-eng.tuple --section left
 ```
 
-Open the dropdown. If the Tuple client is not present, the panel offers to
-install it. Then sign in — the panel shows a code to enter at Tuple's site, the
-same flow as `tuple login` in a terminal.
+Open the dropdown. If Tuple isn't installed, it offers to install it. Then
+**Sign in**: your browser opens Tuple's sign-in page, and you paste the
+authorization code it gives you back into the panel.
 
-## How the client gets installed
+### How the client gets installed
 
-Tuple's own documented install command downloads the binary straight onto your
-`PATH`. This plugin does not do that. `bin/tuple-install` instead:
+Tuple's own install command downloads the binary straight onto your `PATH`.
+`bin/tuple-install` is more careful. It:
 
-1. resolves the current version from Tuple's release endpoint,
+1. asks Tuple's release service for the current version,
 2. refuses to download from any host other than Tuple's own,
 3. downloads to a temporary directory,
-4. verifies the SHA-256 that Tuple publishes with the release, and
-5. only then `install -m 755`s it into place.
+4. checks the SHA-256 Tuple publishes with the release, and
+5. only then puts it in `$XDG_BIN_HOME`, or `~/.local/bin` if that isn't set.
 
-Nothing runs as root, and the downloaded binary is never executed as part of
-installing it. Run it yourself if you would rather not use the button:
+Nothing runs as root, and the download is never executed while installing.
+Run it yourself if you'd rather:
 
 ```bash
-./bin/tuple-install                 # installs to ~/.local/bin
-./bin/tuple-install --check         # report the latest version, install nothing
+./bin/tuple-install                 # install or update
+./bin/tuple-install --check         # print the latest version, install nothing
 ./bin/tuple-install --dest ~/bin    # somewhere else
 ```
 
 ## Settings
 
-Configure these through Omarchy's plugin settings:
-
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| Refresh interval (seconds) | `20` | How often the panel re-reads client state. 5–600. |
-| Install directory for the Tuple binary | `~/.local/bin` | Where `bin/tuple-install` puts the client. |
-| Show status text next to the bar icon | off | Adds the text label beside the glyph. |
-| Notify and play a sound when a call starts or ends | on | Desktop notification plus a sound, since the client signals neither. |
+| Show status text next to the bar icon | off | "In call", "Muted" or "Sharing" beside the icon |
+| Notify when a call starts or ends | on | A desktop notification, since the client shows none |
 
-Saved rooms live alongside these, in Omarchy's `shell.json`. Change any of
-them from the command line with:
+From the command line:
 
 ```bash
+omarchy bar set io.github.gsottnick-eng.tuple showLabel true
 omarchy bar set io.github.gsottnick-eng.tuple callAlerts false
-omarchy bar set io.github.gsottnick-eng.tuple refreshIntervalSec 60
 ```
+
+Tuplet stores nothing about your account. Your rooms, people, and who you're
+signed in as come from Tuple every time.
 
 ## Remove
 
@@ -130,76 +116,59 @@ omarchy bar set io.github.gsottnick-eng.tuple refreshIntervalSec 60
 omarchy plugin remove io.github.gsottnick-eng.tuple
 ```
 
-That disables the widget and deletes the checkout from
-`~/.config/omarchy/plugins/`. Saved rooms and the settings above go with it.
-
-Removing the plugin deliberately leaves the Tuple client itself in place, since
-you may still want it in a terminal. To remove that too:
+That removes the widget and its settings. The Tuple client stays, since you
+may still want it in a terminal. To remove it too:
 
 ```bash
-rm -f ~/.local/bin/tuple          # or wherever you pointed installDir
+tuple stop
+rm -f "$(command -v tuple)"
 rm -rf ~/.local/share/tuple       # your Tuple session and client settings
 ```
 
-## Notes and limitations
+## Known issues
 
-- **Tuple's Linux client is alpha.** It has no room list, and it reports far
-  less about call state than the macOS and Windows apps do — the plugin infers
-  what it can from the client's own output. Expect rough edges that belong to
-  the client, not the plugin.
-- **Joining a room accepts only Tuple's own URLs** — `https://tuple.app/c/…`
-  and `https://production.tuple.app/c/…`. The client rejects anything else, so
-  the panel says so rather than forwarding it.
-- **Screen sharing can fail with `DbusScreenCast failed with
-  UnsupportedVersion`.** This comes from Tuple's client, not the plugin: it
-  asks for an `org.freedesktop.portal.ScreenCast` version that current
-  portals no longer offer. If you hit it, switch the client's `capture`
-  setting from `auto` to `x11` in the panel's settings section — that path
-  goes through XWayland and sidesteps the portal.
-- This project is not affiliated with, endorsed by, or supported by Tuple.
-  "Tuple" is the trademark of its owner.
+These are bugs outside Tuplet. Each says who has to fix it.
+
+- **Sharing your screen can crash Xwayland.** Sharing works and the other side
+  sees your screen, but when sharing starts, Xwayland can crash, closing every
+  X11 app you have open (Zoom, Steam, many games). Native Wayland apps and your
+  session survive. It happens inside Xwayland the moment Tuple's client starts
+  remote control of the shared screen. To be fixed by **Tuple** in its Linux
+  client, and by **Xwayland**, which shouldn't crash whatever a client sends it.
+  Seen with Tuple v2026_10_23.0 and Xwayland 24.1.14.
+- **Screen sharing needs the client's `capture` setting on `auto`**, Tuple's
+  default. The `x11` setting fails under Hyprland with
+  `X11GetImage failed with UnexpectedX11Event`. If you changed it, set it back:
+  `tuple set capture auto`.
+- **`share` and `unshare` are deprecated** in Tuple's client, with no
+  replacement yet. Tuplet hides the share button if a future client drops
+  them. To be resolved by **Tuple**.
+
+## Getting help
+
+Click the bug button in the panel, or run
+`omarchy-shell io.github.gsottnick-eng.tuple diagnose`. Omarchy opens your default
+coding agent with what Tuplet knows about the problem and a guide for
+diagnosing it ([`agents/diagnose/SKILL.md`](agents/diagnose/SKILL.md)). The
+agent works out whether it's Tuplet's bug, Tuple's, or Omarchy's. If it's
+Tuplet's and it can fix it, it prepares a pull request here. Nothing is posted
+without your approval, and your contacts and rooms are kept out of anything it
+writes.
+
+Set a default agent first if you haven't: `omarchy default agent <name>`.
+
+You can also [open an issue](https://github.com/gsottnick-eng/omarchy-tuple/issues).
 
 ## Development
 
-Parser tests need only Node:
+[`AGENTS.md`](AGENTS.md) has the layout, the rules every change keeps, and how
+to run the tests. It is written for coding agents and works for people too.
 
 ```bash
-node --test tests/model.test.mjs
+node --test tests/
 ```
-
-The end-to-end panel tests load the real plugin against Omarchy's real
-`Ui`/`Commons` components under a PySide6 stand-in for Quickshell, and drive it
-the way a click would:
-
-```bash
-python3 -m venv .venv-harness
-.venv-harness/bin/pip install PySide6
-OMARCHY_SHELL=/usr/share/omarchy/shell \
-  .venv-harness/bin/python -m unittest discover -s tests -p 'panel_test.py'
-```
-
-`OMARCHY_SHELL` points at an Omarchy shell tree; it defaults to
-`/tmp/omarchy/shell`, so on a machine without Omarchy installed, clone one:
-
-```bash
-git clone -b quattro https://github.com/basecamp/omarchy.git /tmp/omarchy
-```
-
-A full run takes about four minutes, since every test boots a QML engine and
-waits on real subprocesses. Tests needing a Tuple account run against
-`tests/fake-tuple`, a scripted client reproducing the real one's output; the
-two marked "real client" run against the official binary and skip if it is
-absent.
-
-To look at the panel rather than assert on it:
-
-```bash
-.venv-harness/bin/python tests/harness/main.py --shot panel.png --theme tokyo-night
-```
-
-Screenshots need a Nerd Font aliased to `monospace`, or every glyph renders as
-a box.
 
 ## License
 
-[MIT](LICENSE)
+MIT. This project is not affiliated with, endorsed by, or supported by Tuple.
+"Tuple" is the trademark of its owner.

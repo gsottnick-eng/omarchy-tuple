@@ -1,0 +1,9 @@
+Tuple Login Instructions:
+
+If your browser does not open automatically, go to the following URL and login:
+
+https://tuple.example/start?code_challenge=fake0000
+
+After logging in, copy the "authorization code" and run:
+
+  tuple auth AUTH_CODE

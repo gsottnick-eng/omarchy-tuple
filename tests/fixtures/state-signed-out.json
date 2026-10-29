@@ -1,0 +1,39 @@
+{
+  "in_call": false,
+  "call": null,
+  "user": {
+    "id": 0,
+    "email": "",
+    "short_name": ""
+  },
+  "contacts": {
+    "total": 0,
+    "online": 0,
+    "busy": 0,
+    "favorites": {
+      "total": 0,
+      "online": 0,
+      "online_names": []
+    }
+  },
+  "rooms": {
+    "personal": 0,
+    "team": 0,
+    "occupied": 0
+  },
+  "invites": 0,
+  "connection": {
+    "websocket_state": "disconnected",
+    "is_internet_connected": true
+  },
+  "platform": "linux",
+  "app_version": "v2026_10_23.0",
+  "available_update_version": null,
+  "see": {
+    "call": "tuple call show",
+    "contacts": "tuple contacts list",
+    "favorites_online": "tuple contacts list --favorited --status online",
+    "rooms": "tuple rooms list",
+    "user": "tuple whoami"
+  }
+}

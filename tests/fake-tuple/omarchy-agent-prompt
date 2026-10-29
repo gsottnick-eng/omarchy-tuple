@@ -1,0 +1,3 @@
+#!/bin/sh
+# Stands in for Omarchy's agent launcher: records the prompt instead of opening an agent.
+printf '%s\n' "$*" > "${FAKE_TUPLE_STATE:?}/agent-prompt"

@@ -1,5 +1,0 @@
-overlay | 1 | Show "overlay" annotation window when sharing screen (0|1)
-start-calls-muted | 0 | Start with microphone muted when joining a call (0|1)
-capture | auto | Screen capture mechanism (auto|x11|portal)
-guest-mode | annotation | Current mode in screen window (annotation|control)
-transcription-model |  | File path to whisper ggml model

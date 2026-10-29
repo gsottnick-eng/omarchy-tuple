@@ -1,8 +1,8 @@
 // Parser tests for Model.js.
 //
-// Every fixture under tests/fixtures/ is real output captured from the
-// official Tuple for Linux client (v2026_08_20.0), so these assertions track
-// the client's actual behaviour rather than an idea of it.
+// The JSON fixtures are real output from Tuple for Linux v2026_10_23.0 with
+// every name, email, id, slug and URL replaced by fake values. login.txt is
+// rebuilt from the strings in that binary, not captured from a live sign-in.
 
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
@@ -21,396 +21,140 @@ const source = readFileSync(join(root, "Model.js"), "utf8").replace(/^\s*\.pragm
 const exported = [...source.matchAll(/^function\s+(\w+)/gm)].map((match) => match[1])
 const Model = new Function(`${source}\nreturn { ${exported.join(", ")} }`)()
 
-const fixture = (name) => readFileSync(join(here, "fixtures", `${name}.txt`), "utf8")
-// pactl fixtures keep their .json extension, so they need the full name.
-const fixtureFile = (name) => readFileSync(join(here, "fixtures", name), "utf8")
+const fixture = (name) => readFileSync(join(here, "fixtures", name), "utf8")
 
-test("detects the installed client generation from its banner", () => {
-  const caps = Model.detectCapabilities(fixture("real-banner"))
-  assert.equal(caps.version, "v2026_08_20.0")
-  assert.equal(caps.generation, "legacy")
-  assert.equal(caps.listsRooms, false)
-  assert.equal(caps.supportsJson, false)
+test("a signed-out state has no user", () => {
+  const s = Model.parseState(fixture("state-signed-out.json"))
+  assert.equal(s.loggedIn, false)
+  assert.equal(s.user, null)
+  assert.equal(s.online, false)
+  assert.equal(s.inCall, false)
 })
 
-test("claims the richer surface only when the client advertises it", () => {
-  const caps = Model.detectCapabilities([
-    "Tuple Command-Line Interface v2027_01_01.0",
-    "  tuple rooms list         | List your rooms.",
-    "  tuple contacts list --format json"
-  ].join("\n"))
-  assert.equal(caps.generation, "modern")
-  assert.equal(caps.listsRooms, true)
-  assert.equal(caps.supportsJson, true)
+test("a signed-in idle state carries the user and no call", () => {
+  const s = Model.parseState(fixture("state-idle.json"))
+  assert.equal(s.loggedIn, true)
+  assert.equal(s.user.name, "Ada")
+  assert.equal(s.inCall, false)
+  assert.equal(s.version, "v2026_10_23.0")
+  assert.equal(s.updateVersion, "")
 })
 
-test("classifies every response the client gave us", () => {
-  const cases = [
-    ["real-ls", "logged-out"],
-    ["real-new", "logged-out"],
-    ["real-join-good", "logged-out"],
-    ["real-logout", "logged-out"],
-    ["real-join-bad", "invalid-url"],
-    ["real-join-roomurl", "invalid-url"],
-    ["real-end", "no-call"],
-    ["real-mute", "no-call"],
-    ["real-share", "no-call"],
-    ["real-unknown-verb", "unsupported"],
-    ["real-set-unknown", "unknown-setting"],
-    ["real-set-ok", "setting-updated"]
-  ]
-  for (const [name, kind] of cases) {
-    assert.equal(Model.classifyResponse(fixture(name)).kind, kind, `${name} should classify as ${kind}`)
-  }
+test("the state stream follows a whole call: ringing, connected, mute, unmute, hang up", () => {
+  const states = fixture("state-follow-call.jsonl").trim().split("\n").map((l) => Model.parseState(l))
+  assert.deepEqual(states.map((s) => s.inCall), [false, true, true, true, true, true, true, true, true, false])
+  assert.equal(states[1].connected, false, "ringing is not connected yet")
+  assert.equal(states[5].connected, true)
+  assert.equal(states[6].muted, true)
+  assert.equal(states[7].muted, false)
+  assert.equal(states[5].participants.length, 1)
+  assert.equal(states[9].callId, "")
 })
 
-test("reports which setting the client confirmed", () => {
-  assert.equal(Model.classifyResponse(fixture("real-set-ok")).detail, "overlay")
+test("garbage never parses as state", () => {
+  assert.equal(Model.parseState("not json"), null)
+  assert.equal(Model.parseState("{}"), null)
+  assert.equal(Model.parseState(""), null)
 })
 
-test("strips the daemon's startup log out of command output", () => {
-  const raw = fixture("real-ls-daemon-restart")
-  assert.match(raw, /ConnectionRefused/)
-  assert.equal(Model.stripDaemonLog(raw).trim(), "not logged in")
-  assert.equal(Model.classifyResponse(raw).kind, "logged-out")
-  assert.equal(Model.mentionsDaemonRestart(raw), true)
-  assert.equal(Model.mentionsDaemonRestart(fixture("real-ls")), false)
+test("sharing is read from the raw state", () => {
+  assert.equal(Model.parseSharing(fixture("state-raw-sharing.json")), true)
+  assert.equal(Model.parseSharing(fixture("state-raw-not-sharing.json")), false)
+  assert.equal(Model.parseSharing('{"current_call":null}'), false)
+  assert.equal(Model.parseSharing("garbage"), null)
 })
 
-test("keeps `tuple off` chatter out of the status line", () => {
-  assert.equal(Model.classifyResponse(fixture("real-off")).message, "exiting")
+test("sharing is followed through raw call events, and other events are ignored", () => {
+  const event = (type, data) => JSON.stringify({ type, data })
+  assert.equal(Model.parseSharing(event("current_call", { local: { share_state: "screen" } })), true)
+  assert.equal(Model.parseSharing(event("current_call", { local: { share_state: "audio" } })), false)
+  assert.equal(Model.parseSharing(event("current_call", null)), false)
+  assert.equal(Model.parseSharing(event("state", { current_call: { local: { share_state: "screen" } } })), true)
+  assert.equal(Model.parseSharing(event("session_updated", { id: 1 })), null)
 })
 
-test("parses the settings table, including pipes inside descriptions", () => {
-  const parsed = Model.parseSettings(fixture("real-settings"))
-  assert.equal(parsed.ok, true)
-  assert.equal(parsed.settings.length, 5)
-
-  const byKey = Object.fromEntries(parsed.settings.map((s) => [s.key, s]))
-  assert.deepEqual(Object.keys(byKey).sort(), [
-    "capture", "guest-mode", "overlay", "start-calls-muted", "transcription-model"
-  ])
-
-  assert.equal(byKey.overlay.kind, "bool")
-  assert.deepEqual(byKey.overlay.options, ["0", "1"])
-  assert.equal(byKey.overlay.label, 'Show "overlay" annotation window when sharing screen')
-  assert.equal(byKey.overlay.checked, true)
-
-  assert.equal(byKey.capture.kind, "enum")
-  assert.deepEqual(byKey.capture.options, ["auto", "x11", "portal"])
-  assert.equal(byKey.capture.label, "Screen capture mechanism")
-
-  assert.equal(byKey["transcription-model"].kind, "string")
-  assert.equal(byKey["transcription-model"].value, "")
+test("contacts sort favorites first, then reachable people, then by name", () => {
+  const contacts = Model.parseContacts(fixture("contacts.json"))
+  assert.equal(contacts.length, 6)
+  const firstOther = contacts.findIndex((c) => !c.favorite)
+  assert.ok(contacts.slice(0, firstOther).every((c) => c.favorite))
+  assert.ok(contacts.slice(firstOther).every((c) => !c.favorite))
+  assert.equal(contacts[0].status, "online")
+  assert.equal(contacts[0].initials, "GH")
+  assert.ok(contacts.some((c) => c.joinable), "a busy contact in a joinable call is marked")
 })
 
-test("never mistakes a daemon log line for a setting", () => {
-  const parsed = Model.parseSettings(fixture("real-settings-daemon-restart"))
-  assert.equal(parsed.settings.length, 5)
-  for (const setting of parsed.settings) {
-    assert.match(setting.key, /^[a-z][a-z0-9-]*$/)
-  }
+test("the people list shows favorites and reachable contacts, and searches the rest", () => {
+  const contacts = Model.parseContacts(fixture("contacts.json"))
+  const visible = Model.visibleContacts(contacts, "")
+  assert.ok(visible.length < contacts.length)
+  assert.ok(visible.every((c) => c.favorite || c.status !== "unknown"))
+  const offline = contacts.find((c) => !c.favorite && c.status === "unknown")
+  assert.deepEqual(Model.visibleContacts(contacts, offline.name.slice(0, 4).toUpperCase()).map((c) => c.id).includes(offline.id), true)
+  assert.equal(Model.visibleContacts(contacts, "@example.com").length, contacts.length)
 })
 
-test("cycles setting values the way the client accepts them", () => {
-  const parsed = Model.parseSettings(fixture("real-settings"))
-  const byKey = Object.fromEntries(parsed.settings.map((s) => [s.key, s]))
-  assert.equal(Model.settingToggleValue(byKey.overlay), "0")
-  assert.equal(Model.settingToggleValue(byKey["start-calls-muted"]), "1")
-  assert.equal(Model.nextEnumValue(byKey.capture), "x11")
-  assert.equal(Model.nextEnumValue({ value: "portal", options: ["auto", "x11", "portal"] }), "auto")
+test("rooms put the personal room first, then favorites, then occupied", () => {
+  const rooms = Model.parseRooms(fixture("rooms.json"))
+  assert.equal(rooms.length, 5)
+  assert.equal(rooms[0].personal, true)
+  assert.equal(rooms[0].name, "Your room", "the personal room has no name of its own")
+  assert.ok(rooms[1].favorite && rooms[2].favorite)
+  assert.equal(rooms[3].active, true)
+  assert.ok(rooms.every((r) => r.url.endsWith("/" + r.slug)))
 })
 
-test("reads the sign-in URL out of the login instructions", () => {
-  const parsed = Model.parseLoginOutput(fixture("real-login"))
-  assert.equal(parsed.awaitingCode, true)
-  assert.equal(parsed.loggedIn, false)
-  assert.match(parsed.url, /^https:\/\/production\.tuple\.app\/start\?code_challenge=/)
-  assert.ok(!parsed.url.includes(" "), "URL must not absorb surrounding text")
+test("the room list shows yours, favorites and rooms in use, and searches the rest", () => {
+  const rooms = Model.parseRooms(fixture("rooms.json"))
+  const shown = Model.visibleRooms(rooms, "")
+  assert.deepEqual(shown.map((r) => r.slug), rooms.filter((r) => r.personal || r.favorite || r.active).map((r) => r.slug))
+  const hidden = rooms.find((r) => !shown.includes(r))
+  assert.deepEqual(Model.visibleRooms(rooms, hidden.name.toUpperCase()).map((r) => r.slug), [hidden.slug])
+  assert.deepEqual(Model.visibleRooms(rooms, "https://tuple.example/c/room-1"), shown, "a pasted link is not a search")
+  const contacts = Model.parseContacts(fixture("contacts.json"))
+  assert.deepEqual(Model.visibleContacts(contacts, "https://tuple.example/c/room-1"), Model.visibleContacts(contacts, ""))
 })
 
-test("accepts plausible authorization codes and rejects noise", () => {
-  assert.equal(Model.isAuthCode("abc123_-."), true)
-  assert.equal(Model.isAuthCode("  code1234  "), true)
-  assert.equal(Model.isAuthCode("ab"), false)
-  assert.equal(Model.isAuthCode("has space"), false)
+test("JSON and legacy errors both become a plain sentence", () => {
+  assert.equal(Model.errorMessage(fixture("error-unauthorized.json")), "not signed in")
+  assert.equal(Model.errorMessage(fixture("error-legacy.txt")), "start does not take any command-line args")
+  assert.equal(Model.errorMessage("error: no auth session, run 'tuple login' first"), "no auth session, run 'tuple login' first")
 })
 
-// The client's own format strings, read out of the v2026_08_20.0 binary:
-//   `tuple ls`   -> "  {} {} <{}> [{}]{}"
-//   `tuple call` -> "  {}) {} <{}>"
-const LS_OUTPUT = [
-  "  usr_101 Ada Lovelace <ada@example.com> [online]",
-  "  usr_102 Grace Hopper <grace@example.com> [offline] *",
-  "  usr_103 Alan Turing <alan@example.com> [busy]"
-].join("\n")
-
-const PICKER_OUTPUT = [
-  "  1) Grace Hopper <grace@example.com>",
-  "  2) Ada Lovelace <ada@example.com>",
-  "  3) Alan Turing <alan@example.com>",
-  "error: enter a number starting from 1"
-].join("\n")
-
-test("parses `tuple ls` rows, keeping the id that `tuple favorite` needs", () => {
-  const parsed = Model.parseContacts(LS_OUTPUT)
-
-  assert.equal(parsed.loggedIn, true)
-  assert.equal(parsed.contacts.length, 3)
-  assert.deepEqual(parsed.contacts.map((c) => c.selector), ["usr_101", "usr_102", "usr_103"])
-  assert.equal(parsed.contacts[0].name, "Ada Lovelace")
-  assert.equal(parsed.contacts[0].initials, "AL")
-  assert.equal(parsed.contacts[0].status, "online")
-  assert.equal(parsed.contacts[0].email, "ada@example.com")
-  assert.equal(parsed.contacts[1].favorite, true)
-  assert.equal(parsed.contacts[2].status, "busy")
+test("the sign-in URL is the https link in the login instructions", () => {
+  assert.equal(Model.parseLoginUrl(fixture("login.txt")), "https://tuple.example/start?code_challenge=fake0000")
+  assert.equal(Model.parseLoginUrl("http://insecure.example/start"), "")
 })
 
-test("reads the call number from the picker rather than assuming list order", () => {
-  const entries = Model.parseCallPicker(PICKER_OUTPUT)
-  assert.deepEqual(entries.map((e) => e.number), ["1", "2", "3"])
-
-  const contacts = Model.parseContacts(LS_OUTPUT).contacts
-  // Ada is first in `ls` but second in the picker: the number must come from
-  // the picker or the plugin would call the wrong person.
-  assert.equal(Model.pickerNumberFor(entries, contacts[0]), "2")
-  assert.equal(Model.pickerNumberFor(entries, contacts[1]), "1")
-  assert.equal(Model.pickerNumberFor(entries, { name: "Nobody", email: "" }), "")
-  assert.equal(Model.pickerNumberFor(entries, null), "")
+test("only https links are offered to the client to join", () => {
+  assert.equal(Model.isJoinableUrl(" https://tuple.example/c/room-1 "), true)
+  assert.equal(Model.isJoinableUrl("http://tuple.example/c/room-1"), false)
+  assert.equal(Model.isJoinableUrl("room-1"), false)
 })
 
-test("falls back to picker rows if that is all it is given", () => {
-  const parsed = Model.parseContacts(PICKER_OUTPUT)
-  assert.equal(parsed.contacts.length, 3)
-  assert.equal(parsed.contacts[0].name, "Grace Hopper")
+test("share is offered only while the client still lists it", () => {
+  assert.equal(Model.supportsShare(fixture("help.txt")), true)
+  assert.equal(Model.supportsShare(fixture("help.txt").replace(/^\s+share\s.*$/m, "")), false)
 })
 
-test("reports the signed-out contact list as signed out", () => {
-  const parsed = Model.parseContacts(fixture("real-ls"))
-  assert.equal(parsed.loggedIn, false)
-  assert.equal(parsed.contacts.length, 0)
+test("install events parse, anything else is ignored", () => {
+  assert.deepEqual(Model.parseInstallEvent('{"stage":"done","message":"ok","version":"v1","path":"/x/tuple"}'),
+    { stage: "done", message: "ok", version: "v1", path: "/x/tuple" })
+  assert.equal(Model.parseInstallEvent("Downloading…"), null)
 })
 
-test("sorts favourites first, then by presence, then by name", () => {
-  const sorted = Model.sortContacts([
-    { name: "Zoe", status: "online", favorite: false },
-    { name: "Ada", status: "offline", favorite: false },
-    { name: "Bob", status: "online", favorite: false },
-    { name: "Yuki", status: "offline", favorite: true }
-  ])
-  assert.deepEqual(sorted.map((c) => c.name), ["Yuki", "Bob", "Zoe", "Ada"])
-})
-
-test("accepts the link formats the client can actually join", () => {
-  const url = Model.normalizeRoomInput("https://tuple.app/c/abc123")
-  assert.equal(url.ok, true)
-  assert.equal(url.slug, "abc123")
-  assert.equal(url.name, "abc123")
-
-  const production = Model.normalizeRoomInput("https://production.tuple.app/c/xyz", "Standup")
-  assert.equal(production.ok, true)
-  assert.equal(production.name, "Standup")
-
-  const bare = Model.normalizeRoomInput("abc123")
-  assert.equal(bare.ok, true)
-  assert.equal(bare.url, "https://tuple.app/c/abc123")
-})
-
-test("explains the /room/ link the client rejects instead of forwarding it", () => {
-  const room = Model.normalizeRoomInput("https://tuple.app/room/design")
-  assert.equal(room.ok, false)
-  assert.equal(room.reason, "room-url")
-  assert.match(room.message, /tuple\.app\/c\//)
-
-  // The client's own answer confirms the plugin is right to refuse.
-  assert.equal(Model.classifyResponse(fixture("real-join-roomurl")).kind, "invalid-url")
-})
-
-test("rejects input that is not a link at all", () => {
-  assert.equal(Model.normalizeRoomInput("").reason, "empty")
-  assert.equal(Model.normalizeRoomInput("https://example.com/c/x").ok, false)
-  assert.equal(Model.normalizeRoomInput("ab").ok, false)
-})
-
-test("round-trips saved rooms through settings storage", () => {
-  const stored = [
-    { url: "https://tuple.app/c/one", name: "One", favorite: true },
-    "https://tuple.app/c/two",
-    { url: "https://tuple.app/c/one", name: "Duplicate" },
-    { url: "not-a-url", name: "Bad" }
-  ]
-  const rooms = Model.normalizeSavedRooms(stored)
-  assert.deepEqual(rooms.map((r) => r.slug), ["one", "two"])
-  assert.equal(rooms[0].favorite, true)
-  assert.equal(rooms[1].name, "two")
-
-  const serialized = Model.serializeSavedRooms(rooms)
-  assert.deepEqual(Model.normalizeSavedRooms(serialized).map((r) => r.url), rooms.map((r) => r.url))
-})
-
-test("puts occupied and personal rooms at the top of the list", () => {
-  const merged = Model.mergeRooms(
-    "https://tuple.app/c/mine",
-    Model.normalizeSavedRooms([{ url: "https://tuple.app/c/saved", name: "Saved" }]),
-    [Model.makeRoom("https://tuple.app/c/busy", "Busy", { kind: "team", occupants: 2 })]
-  )
-  assert.deepEqual(merged.map((r) => r.name), ["Busy", "My personal room", "Saved"])
-  assert.equal(Model.occupancyLabel(merged[0]), "2 people")
-  assert.equal(Model.occupancyLabel(merged[1]), "")
-  assert.equal(Model.occupancyLabel({ occupants: 1 }), "1 person")
-  assert.equal(Model.occupancyLabel({ occupants: 0 }), "Empty")
-})
-
-test("parses the room list a future client would emit", () => {
-  const parsed = Model.parseRoomsJson(JSON.stringify([
-    { name: "Design", url: "https://tuple.app/c/design", occupants: 1, favorited: true },
-    { slug: "backend", kind: "personal", members: [{ name: "Ada" }] }
-  ]))
-  assert.equal(parsed.ok, true)
-  assert.equal(parsed.rooms[0].favorite, true)
-  assert.equal(parsed.rooms[1].url, "https://tuple.app/c/backend")
-  assert.equal(parsed.rooms[1].occupants, 1)
-  assert.equal(Model.parseRoomsJson("not json").ok, false)
-})
-
-test("finds the personal room URL in `tuple new` output", () => {
-  assert.equal(
-    Model.parsePersonalUrl("Personal URL: https://tuple.app/c/ada-personal"),
-    "https://tuple.app/c/ada-personal"
-  )
-  assert.equal(Model.parsePersonalUrl(fixture("real-new")), "")
-})
-
-test("derives call state from the daemon log", () => {
-  const idle = { inCall: false, sharing: false, muted: false }
-  assert.deepEqual(Model.deriveCallState("17:00:00.1|1|1|info|entered room", idle), {
-    inCall: true, sharing: false, muted: false
-  })
-  assert.deepEqual(
-    Model.deriveCallState("local user started sharing screen", idle),
-    { inCall: true, sharing: true, muted: false }
-  )
-  // Leaving a call must also clear screen sharing.
-  assert.deepEqual(
-    Model.deriveCallState("entered room\nlocal user started sharing screen\ncall ended", idle),
-    { inCall: false, sharing: false, muted: false }
-  )
-  assert.equal(Model.deriveCallState("local user ada sending audio: false", idle).muted, true)
-  assert.equal(Model.deriveCallState("", { inCall: true, sharing: false, muted: true }).inCall, true)
-})
-
-test("detects the daemon by its abstract socket", () => {
-  assert.equal(Model.daemonSocketPresent(fixture("proc-net-unix-daemon-up")), true)
-  assert.equal(Model.daemonSocketPresent(fixture("proc-net-unix-daemon-down")), false)
-  assert.equal(Model.daemonSocketPresent(""), false)
-})
-
-test("reads installer progress events", () => {
-  const event = Model.parseInstallEvent('{"stage":"download","message":"Downloading Tuple","version":"v1"}')
-  assert.equal(event.stage, "download")
-  assert.equal(event.version, "v1")
-  assert.equal(Model.parseInstallEvent("Downloading Tuple"), null)
-  assert.equal(Model.parseInstallEvent('{"no":"stage"}'), null)
-  assert.equal(Model.installStageLabel("verify"), "Verifying checksum…")
-})
-
-test("summarises status in the order the user cares about", () => {
-  assert.equal(Model.statusSummary({ installed: false }), "Tuple is not installed")
-  assert.equal(Model.statusSummary({ installed: true, daemonRunning: false }), "Tuple is not running")
-  assert.equal(
-    Model.statusSummary({ installed: true, daemonRunning: true, loggedIn: false }),
-    "Signed out"
-  )
-  assert.equal(
-    Model.statusSummary({ installed: true, daemonRunning: true, loggedIn: true }),
-    "Available"
-  )
-  assert.equal(
-    Model.statusSummary({ installed: true, daemonRunning: true, loggedIn: true, inCall: true, sharing: true }),
-    "In a call · sharing"
-  )
-})
-
-test("clamps the refresh interval to a sane range", () => {
-  assert.equal(Model.clampInt("45", 20, 5, 600), 45)
-  assert.equal(Model.clampInt("1", 20, 5, 600), 5)
-  assert.equal(Model.clampInt("nonsense", 20, 5, 600), 20)
-})
-
-// ------------------------------------------------------------------- audio
-
-test("lists audio outputs from pactl JSON", () => {
-  const devices = Model.parseAudioDevices(fixtureFile("real-pactl-sinks.json"), "sink")
-  assert.equal(devices.length, 3)
-  assert.deepEqual(devices.map((d) => d.label), [
-    "800 Series Chipset Family Audio Context Engine (ACE) Analog Stereo",
-    "GB203 High Definition Audio Controller Digital Stereo (HDMI)",
-    "Shure MVX2U Analog Stereo",
-  ])
-})
-
-test("drops sink monitors when listing audio inputs", () => {
-  const devices = Model.parseAudioDevices(fixtureFile("real-pactl-sources.json"), "source")
-  assert.equal(devices.length, 3)
-  assert.ok(devices.every((d) => !d.name.endsWith(".monitor")))
-  assert.deepEqual(devices.map((d) => d.label), [
-    "800 Series Chipset Family Audio Context Engine (ACE) Analog Stereo",
-    "Razer Kiyo X Analog Stereo",
-    "Shure MVX2U Mono",
-  ])
-})
-
-test("survives pactl being absent or answering with rubbish", () => {
-  assert.deepEqual(Model.parseAudioDevices("", "sink"), [])
-  assert.deepEqual(Model.parseAudioDevices("command not found", "sink"), [])
-  assert.deepEqual(Model.parseAudioDevices("{}", "sink"), [])
-  assert.deepEqual(Model.parseAudioDevices('[{"description":"no name"}]', "sink"), [])
-})
-
-test("reads the default device name back out of pactl", () => {
-  assert.equal(Model.parseDefaultDevice("alsa_output.pci-0000_80_1f.3.analog-stereo\n"),
-    "alsa_output.pci-0000_80_1f.3.analog-stereo")
-  assert.equal(Model.parseDefaultDevice("\n\n"), "")
-  assert.equal(Model.parseDefaultDevice("Failure: no such entity"), "")
-})
-
-test("names the active device for the panel", () => {
-  const devices = Model.parseAudioDevices(fixtureFile("real-pactl-sinks.json"), "sink")
-  assert.equal(Model.activeDeviceLabel(devices, "alsa_output.pci-0000_80_1f.3.analog-stereo"),
-    "800 Series Chipset Family Audio Context Engine (ACE) Analog Stereo")
-  assert.equal(Model.activeDeviceLabel(devices, "gone"), "")
-  assert.equal(Model.activeDeviceLabel(null, "gone"), "")
-})
-
-test("splits the two default device names pactl prints back to back", () => {
-  const pair = Model.parseDefaultPair("alsa_output.a.analog-stereo\nalsa_input.b.mono-fallback\n")
-  assert.deepEqual(pair, { sink: "alsa_output.a.analog-stereo", source: "alsa_input.b.mono-fallback" })
-  assert.deepEqual(Model.parseDefaultPair(""), { sink: "", source: "" })
-  assert.deepEqual(Model.parseDefaultPair("Failure: no such entity"), { sink: "", source: "" })
-})
-
-test("strips daemon log lines that carry a source location", () => {
-  // The captured fixtures predate this shape: the running client emits
-  // "…|info|Engine.cpp:589|cli: ls", one field longer than "…|info|message".
-  const raw = "19:48:23.767|350698|350696|info|Engine.cpp:589|cli: ls\nnot logged in\n"
-  assert.equal(Model.stripDaemonLog(raw), "not logged in\n")
-})
-
-test("reads booleans that arrive as strings from `omarchy bar set`", () => {
-  // Without --json the CLI quotes the value, so a setting the user turned on
-  // reaches the plugin as "true". Treating that as false turns the feature
-  // off exactly when it was asked for.
-  for (const yes of [true, "true", "True", " on ", "1", "yes"]) {
-    assert.equal(Model.toBool(yes, false), true, `${JSON.stringify(yes)} should be true`)
-  }
-  for (const no of [false, "false", "off", "0", "no", ""]) {
-    assert.equal(Model.toBool(no, true), false, `${JSON.stringify(no)} should be false`)
-  }
-})
-
-test("falls back when a boolean setting is missing or nonsense", () => {
+test("boolean settings accept the strings omarchy bar set writes", () => {
+  assert.equal(Model.toBool("true", false), true)
+  assert.equal(Model.toBool("off", true), false)
   assert.equal(Model.toBool(undefined, true), true)
-  assert.equal(Model.toBool(null, false), false)
-  assert.equal(Model.toBool("banana", true), true)
-  assert.equal(Model.toBool("banana", false), false)
+})
+
+test("the status summary reads in priority order", () => {
+  const base = { installed: true, daemonRunning: true, loggedIn: true, inCall: true, muted: true, sharing: false }
+  assert.equal(Model.statusSummary({ ...base, installed: false }), "Not installed")
+  assert.equal(Model.statusSummary({ ...base, daemonRunning: false }), "Stopped")
+  assert.equal(Model.statusSummary({ ...base, loggedIn: false }), "Signed out")
+  assert.equal(Model.statusSummary(base), "In a call, muted")
+  assert.equal(Model.statusSummary({ ...base, sharing: true }), "Sharing")
+  assert.equal(Model.statusSummary({ ...base, inCall: false }), "Ready")
 })
