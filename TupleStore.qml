@@ -141,6 +141,14 @@ Singleton {
     var s = Model.parseState(line)
     if (!s) return
     var wasInCall = inCall
+    // Lines that arrive within a second of Share are echoes of the start;
+    // only a later snapshot means the daemon answers again, i.e. the picker
+    // closed — picked or cancelled.
+    if (pickerPending && new Date().getTime() - pickerIssuedAt > 1000) {
+      pickerPending = false
+      pickerTimer.stop()
+      if (status.slice(-1) === ".") status = ""
+    }
     restartTimer.interval = 1000
     daemonRunning = true
     user = s.user
@@ -185,11 +193,11 @@ Singleton {
 
   // ---------------------------------------------------------------- actions
 
-  function run(args, label) {
+  function run(args, label, urgent) {
     if (!installed) return
     // The daemon is blocked on the portal picker; piling up commands made
-    // things worse in testing.
-    if (pickerPending) { note("Tuple is waiting for the share picker…"); return }
+    // things worse in testing. Leaving is always allowed.
+    if (pickerPending && !urgent) { note("Tuple is waiting for the share picker…"); return }
     if (actionProcess.running) {
       note("Still finishing the last command…")
       return
@@ -229,7 +237,7 @@ Singleton {
     if (actionProcess.running) return
     _checkingXwayland = true
     progress("")
-    actionProcess.command = ["coredumpctl", "list", "--no-legend", "--no-pager", "--since", "@" + epoch, "/usr/bin/Xwayland"]
+    actionProcess.command = ["coredumpctl", "list", "--no-legend", "--no-pager", "--since", "@" + epoch, "COREDUMP_COMM=Xwayland"]
     actionProcess.running = true
   }
 
@@ -237,7 +245,9 @@ Singleton {
     if (pickerPending) return
     run(["share"], "Choose a screen to share in the picker. Tuple pauses until you do.")
     // The daemon's main thread blocks while the portal picker is open, so no
-    // other command can run; hold this status until sharing starts or 60 s.
+    // other command can run; hold this status until the daemon answers again
+    // (the picker closed, picked or cancelled), sharing starts, or 60 s.
+    pickerIssuedAt = new Date().getTime()
     pickerPending = true
     pickerTimer.restart()
   }
@@ -259,7 +269,7 @@ Singleton {
 
   function leave() {
     if (callProcess.running) callProcess.running = false
-    if (inCall || calling !== "") run(["call", "leave"], "Leaving the call…")
+    if (inCall || calling !== "") run(["call", "leave"], "Leaving the call…", true)
     calling = ""
   }
 
@@ -391,6 +401,7 @@ Singleton {
   // True from Share until the client reports sharing or 60 s pass: the daemon
   // is blocked on the portal picker meanwhile.
   property bool pickerPending: false
+  property real pickerIssuedAt: 0
   property bool _checkingXwayland: false
   Timer {
     id: pickerTimer

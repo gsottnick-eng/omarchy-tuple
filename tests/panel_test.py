@@ -306,6 +306,22 @@ class PanelTest(unittest.TestCase):
         self.assertNotIn("call mute", harness.argv())
         self.assertIn("Tuple is waiting for the share picker", harness.final["status"],
                       "refused commands say why")
+        # Leaving always works, picker or not.
+        harness.run(["leave", "wait:500"])
+        self.assertIn("call leave", harness.argv())
+
+    def test_a_cancelled_picker_unblocks_on_the_next_snapshot(self):
+        # picker_holds keeps the fake from reporting sharing; the cancelled
+        # picker makes the daemon answer again without a share.
+        harness = self.harness(logged_in=True, in_call=True, flags=("picker_holds", "muted"))
+        state = harness.run(["wait:300", "share", "wait:1200",
+                             "flag:picker_cancelled", "wait:800", "mute", "wait:800"])
+        self.assertTrue(harness.after(2)["pickerPending"], "held while the picker is up")
+        self.assertFalse(state["pickerPending"], "the next snapshot ends the picker wait")
+        self.assertFalse(state["sharing"], "nothing was picked")
+        # The cancelled-pick snapshot also un-muted the panel, so toggling
+        # mutes again — the point is that a command runs immediately.
+        self.assertIn("call mute", harness.argv(), "commands run again at once")
 
     def test_sharing_unblocks_when_the_client_reports_sharing(self):
         harness = self.harness(logged_in=True, in_call=True, flags=("picker_holds",))

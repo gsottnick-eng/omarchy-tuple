@@ -83,22 +83,27 @@ Filed on hyprwm/Hyprland (link lands here once open).
 Title: **Xwayland is not restarted after it crashes; every later X11 client
 hangs on connect until re-login**
 
-What happened: Xwayland segfaulted twice in one session (once the moment a
-screen share started, once while idle). Hyprland did not restart it. The dead
-Xwayland kept its socket `/tmp/.X11-unix/X0` listening but never accepted
-again, so every subsequent X11 client hung on connect — including non-graphical
-daemons. Toggling `xwayland.enabled` off and on with `hyprctl eval` did not
-recover it. Logging out and back in was the only fix.
+What happened: Xwayland segfaulted twice in one session — once the moment a
+screen share started, once while Hyprland was otherwise idle. Hyprland never
+started a new Xwayland, so every subsequent X11 client hung on connect, and
+only logging out and back in fixed it.
 
-Expected: Hyprland respawns a crashed Xwayland (or at least closes the stale
-socket so clients fail fast instead of hanging).
+The socket stayed listening, but not because of the dead Xwayland:
+`ss -xlp` shows `/tmp/.X11-unix/X0` owned by the Hyprland process. Hyprland
+never spawns a new Xwayland to accept the queued connections, so clients
+connect and wait forever. Toggling `xwayland.enabled` off and on with
+`hyprctl eval` did not recover it either.
 
-Steps to reproduce: kill Xwayland (`pkill -SEGV Xwayland`); try to start any
-X11 app — it hangs; `ls /tmp/.X11-unix/X0` still exists; restart Hyprland or
-re-login to recover.
+Expected: Hyprland respawns a crashed Xwayland, or at least closes the stale
+socket so clients fail fast instead of hanging.
 
-Versions: Hyprland 0.56.2, Xwayland 24.1.14, NVIDIA RTX 5080, two monitors,
-Arch Linux.
+Observed in one session: two Xwayland crashes (coredumpctl lists both as
+`/usr/bin/Xwayland`, SIGSEGV); after each, X11 clients hung on connect until
+re-login.
+
+Versions: Hyprland 0.56.2 built from branch v0.56.2 at commit
+efb50993780079460b0cbed1363e2166a2de1d9f clean ([gha] Nix: update inputs);
+xorg-xwayland 24.1.14-1; NVIDIA RTX 5080, two monitors, Arch Linux.
 
 ## Draft: report to freedesktop GitLab (Xwayland)
 
