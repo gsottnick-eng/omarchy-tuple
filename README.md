@@ -8,9 +8,10 @@ rooms, your people, and call controls, one click from the bar.
 
 ## Features
 
-- **Rooms**: your room, favorite rooms, and any room in use, one click to join.
-- **People**: favorites and anyone online or in a call. Click to call them, or
-  to join the call they're in.
+- **Rooms**: one scrolling list with your room first, then favorites A to Z,
+  then rooms in use and everything else. One click to join.
+- **People**: everyone, with favorites and anyone online or in a call at the
+  top. Click to call them, or to join the call they're in.
 - **Search**: one field finds any room or person. Paste a call link into it
   and press Enter to join.
 - **Calls**: mute, share your screen, leave, and answer incoming calls. The bar
@@ -20,6 +21,10 @@ rooms, your people, and call controls, one click from the bar.
 - **Diagnose with my agent**: the bug button in the panel hands a problem to
   your default coding agent, which can find the cause and, with your approval,
   open a pull request or issue here. See [Getting help](#getting-help).
+
+| In a call | Signing in |
+| --- | --- |
+| ![In a call, muted and sharing](screenshots/in-call.png) | ![Pasting the authorization code](screenshots/sign-in.png) |
 
 Nothing is polled: Tuple's client pushes every change, so the widget costs
 nothing while nothing happens. It runs once for all your monitors.
@@ -43,9 +48,9 @@ Right-click the bar icon during a call to mute.
 ### Bind keys to calls
 
 ```bash
-omarchy-shell io.github.gsottnick-eng.tuple mute
-omarchy-shell io.github.gsottnick-eng.tuple leave
-omarchy-shell io.github.gsottnick-eng.tuple toggle
+omarchy-shell io.github.gsottnick.tuple mute
+omarchy-shell io.github.gsottnick.tuple leave
+omarchy-shell io.github.gsottnick.tuple toggle
 ```
 
 Also `share`, `accept`, `join <link>`, `status`, `open`, `close`, and `diagnose`.
@@ -60,14 +65,24 @@ Also `share`, `accept`, `join <link>`, `status`, `open`, `close`, and `diagnose`
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/gsottnick-eng/omarchy-tuple.git --enable
+omarchy plugin add https://github.com/gsottnick/omarchy-tuple.git --enable
 ```
 
 The widget lands on the right of the bar. Move it with:
 
 ```bash
-omarchy bar move io.github.gsottnick-eng.tuple --section left
+omarchy bar move io.github.gsottnick.tuple --section left
 ```
+
+Installed before the plugin id changed (`io.github.gsottnick-eng.tuple`)?
+Remove it under the old id and add it again; your Tuple sign-in is unaffected:
+
+```bash
+omarchy plugin remove io.github.gsottnick-eng.tuple
+omarchy plugin add https://github.com/gsottnick/omarchy-tuple.git --enable
+```
+
+Then update any keybindings that call `omarchy-shell io.github.gsottnick-eng.tuple`.
 
 Open the dropdown. If Tuple isn't installed, it offers to install it. Then
 **Sign in**: your browser opens Tuple's sign-in page, and you paste the
@@ -103,8 +118,8 @@ Run it yourself if you'd rather:
 From the command line:
 
 ```bash
-omarchy bar set io.github.gsottnick-eng.tuple showLabel true
-omarchy bar set io.github.gsottnick-eng.tuple callAlerts false
+omarchy bar set io.github.gsottnick.tuple showLabel true
+omarchy bar set io.github.gsottnick.tuple callAlerts false
 ```
 
 Tuplet stores nothing about your account. Your rooms, people, and who you're
@@ -113,7 +128,7 @@ signed in as come from Tuple every time.
 ## Remove
 
 ```bash
-omarchy plugin remove io.github.gsottnick-eng.tuple
+omarchy plugin remove io.github.gsottnick.tuple
 ```
 
 That removes the widget and its settings. The Tuple client stays, since you
@@ -147,7 +162,7 @@ These are bugs outside Tuplet. Each says who has to fix it.
 ## Getting help
 
 Click the bug button in the panel, or run
-`omarchy-shell io.github.gsottnick-eng.tuple diagnose`. Omarchy opens your default
+`omarchy-shell io.github.gsottnick.tuple diagnose`. Omarchy opens your default
 coding agent with what Tuplet knows about the problem and a guide for
 diagnosing it ([`agents/diagnose/SKILL.md`](agents/diagnose/SKILL.md)). The
 agent works out whether it's Tuplet's bug, Tuple's, or Omarchy's. If it's
@@ -157,7 +172,7 @@ writes.
 
 Set a default agent first if you haven't: `omarchy default agent <name>`.
 
-You can also [open an issue](https://github.com/gsottnick-eng/omarchy-tuple/issues).
+You can also [open an issue](https://github.com/gsottnick/omarchy-tuple/issues).
 
 ## Development
 

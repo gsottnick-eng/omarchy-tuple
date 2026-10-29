@@ -132,14 +132,13 @@ function parseContacts(raw) {
   })
 }
 
-// With a large team the panel lists favorites and anyone reachable, and only
-// searches the rest.
+// Everyone, already sorted favorites and reachable people first; a search
+// narrows it by name or email.
 function visibleContacts(contacts, query) {
   var q = text(query).trim().toLowerCase()
   if (isJoinableUrl(q)) q = ""
   return toArray(contacts).filter(function(c) {
-    if (q !== "") return c.name.toLowerCase().indexOf(q) !== -1 || c.email.toLowerCase().indexOf(q) !== -1
-    return c.favorite || c.status in STATUS_RANK
+    return q === "" || c.name.toLowerCase().indexOf(q) !== -1 || c.email.toLowerCase().indexOf(q) !== -1
   })
 }
 
@@ -168,13 +167,12 @@ function parseRooms(raw) {
   })
 }
 
-// Like people: your room, favorites and rooms in use by default; search the rest.
+// Every room, already sorted; a search narrows it by name or slug.
 function visibleRooms(rooms, query) {
   var q = text(query).trim().toLowerCase()
   if (isJoinableUrl(q)) q = ""
   return toArray(rooms).filter(function(r) {
-    if (q !== "") return r.name.toLowerCase().indexOf(q) !== -1 || r.slug.toLowerCase().indexOf(q) !== -1
-    return r.personal || r.favorite || r.active
+    return q === "" || r.name.toLowerCase().indexOf(q) !== -1 || r.slug.toLowerCase().indexOf(q) !== -1
   })
 }
 

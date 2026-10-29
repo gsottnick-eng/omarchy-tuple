@@ -132,12 +132,12 @@ class PanelTest(unittest.TestCase):
         self.assertNotEqual(state["error"], "")
         self.assertFalse(any(line.startswith("auth") for line in harness.argv()))
 
-    def test_signed_in_shows_favorites_and_reachable_people_and_searches_the_rest(self):
+    def test_signed_in_lists_everyone_and_a_search_narrows_rooms_and_people(self):
         harness = self.harness(logged_in=True)
         state = harness.run(["wait:200", "search:Frances"])
         before = harness.after(0)
         self.assertTrue(before["panel"]["rooms"][0]["personal"])
-        self.assertNotIn("Frances Allen", [p["name"] for p in before["panel"]["people"]])
+        self.assertEqual(len(before["panel"]["people"]), 6)
         self.assertEqual(len(state["contacts"]), 6)
         self.assertEqual([p["name"] for p in state["panel"]["people"]], ["Frances Allen"])
         self.assertEqual(state["panel"]["rooms"], [], "the search filters rooms too")

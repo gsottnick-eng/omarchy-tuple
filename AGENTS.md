@@ -108,7 +108,9 @@ which shadows Omarchy's in this harness. Quickshell itself is not affected.
 - Keep diffs small and focused on one problem. Add a test that fails without the
   change.
 - Run both test suites; both must pass.
-- Do not change the plugin id in `manifest.json`. Marketplace ids are permanent.
+- Do not change the plugin id in `manifest.json` once the plugin is listed in the
+  marketplace, where ids are permanent. It changed once before listing, from
+  `io.github.gsottnick-eng.tuple`, when the GitHub account was renamed.
 - Bump `version` in `manifest.json` for any change users will receive.
 - Machine-authored pull requests and issues end with
   `Filed by <model name> via <agent harness>.`

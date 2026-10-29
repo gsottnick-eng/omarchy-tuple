@@ -12,8 +12,8 @@ import "Model.js" as Model
 // for every monitor.
 Panel {
   id: root
-  moduleName: "io.github.gsottnick-eng.tuple"
-  ipcTarget: "io.github.gsottnick-eng.tuple"
+  moduleName: "io.github.gsottnick.tuple"
+  ipcTarget: "io.github.gsottnick.tuple"
   // The handler below adds call verbs to open/close. Built once per monitor,
   // only the first registers; the rest log a warning, as first-party widgets do.
   manageIpc: false
@@ -61,8 +61,13 @@ Panel {
     return order
   }
 
+  function sectionList(section) {
+    return section === "rooms" ? rooms : (section === "people" ? people : null)
+  }
+
   function sectionLength(section) {
-    return section === "rooms" ? rooms.length : (section === "people" ? people.length : 1)
+    var list = sectionList(section)
+    return list ? list.length : 1
   }
 
   function sectionIndex(section) {
@@ -119,17 +124,8 @@ Panel {
   }
 
   function scrollCursorIntoView() {
-    var column = focusSection === "rooms" ? roomColumn : (focusSection === "people" ? peopleColumn : null)
-    var item = column ? column.children[sectionIndex(focusSection)] : null
-    if (!item) return
-    Qt.callLater(function() {
-      var top = item.mapToItem(panelFlick.contentItem, 0, 0).y
-      var margin = Style.space(6)
-      if (top < panelFlick.contentY + margin) panelFlick.contentY = Math.max(0, top - margin)
-      else if (top + item.height > panelFlick.contentY + panelFlick.height - margin)
-        panelFlick.contentY = Math.min(Math.max(0, panelFlick.contentHeight - panelFlick.height),
-          top + item.height + margin - panelFlick.height)
-    })
+    var view = focusSection === "rooms" ? roomList : (focusSection === "people" ? peopleList : null)
+    if (view) view.positionViewAtIndex(sectionIndex(focusSection), ListView.Contain)
   }
 
   implicitWidth: button.implicitWidth
@@ -137,7 +133,8 @@ Panel {
 
   onOpenedChanged: if (opened) {
     cursorActive = false
-    panelFlick.contentY = 0
+    roomList.positionViewAtBeginning()
+    peopleList.positionViewAtBeginning()
     if (!TupleStore.installed) TupleStore.probe()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
@@ -170,7 +167,7 @@ Panel {
       Item {
         TupleIcon {
           anchors.centerIn: parent
-          iconSize: Style.space(12)
+          iconSize: Style.bar.iconCanvas
           color: root.ready ? root.barForeground : Qt.darker(root.barForeground, 1.55)
           badgeColor: root.urgent
           filled: TupleStore.inCall
@@ -193,7 +190,9 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(380))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(620))
+    // Signed in, the panel keeps one height and its content scrolls, so
+    // searching never resizes it. Setup and sign-in fit their few lines.
+    contentHeight: panel.fittedContentHeight(root.ready ? Style.space(620) : column.implicitHeight, Style.space(620))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -215,25 +214,23 @@ Panel {
         else if (key === "/" && root.ready) searchField.forceActiveFocus()
       }
 
-      Flickable {
-        id: panelFlick
+      // The panel itself does not scroll: each list scrolls on its own, and
+      // People takes whatever height is left.
+      Item {
         anchors.fill: parent
-        contentWidth: width
-        contentHeight: column.implicitHeight
         clip: true
-        boundsBehavior: Flickable.StopAtBounds
-        interactive: contentHeight > height
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-        Column {
+        ColumnLayout {
           id: column
-          width: panelFlick.width
+          width: parent.width
+          height: root.ready ? parent.height : implicitHeight
           spacing: Style.space(12)
 
           // ------------------------------------------------------- header
           PanelHero {
             id: hero
-            width: parent.width
+            Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
             title: TupleStore.user ? TupleStore.user.name : "Tuple"
             meta: TupleStore.summary
             detail: TupleStore.installed && TupleStore.loggedIn && !TupleStore.online ? "OFFLINE" : ""
@@ -271,7 +268,8 @@ Panel {
 
           Text {
             visible: text !== ""
-            width: parent.width
+            Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
             text: TupleStore.error !== "" ? TupleStore.error : TupleStore.status
             color: TupleStore.error !== "" ? root.urgent : root.dim
             font.family: root.fontFamily
@@ -283,7 +281,8 @@ Panel {
           // -------------------------------------------------------- setup
           Column {
             visible: TupleStore.probed && !TupleStore.installed
-            width: parent.width
+            Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
             spacing: Style.space(8)
 
             Text {
@@ -310,7 +309,8 @@ Panel {
           // ------------------------------------------------------ sign in
           Column {
             visible: TupleStore.installed && TupleStore.daemonRunning && !TupleStore.loggedIn
-            width: parent.width
+            Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
             spacing: Style.space(8)
 
             Text {
@@ -379,11 +379,12 @@ Panel {
           }
 
           // --------------------------------------------------------- call
-          PanelSeparator { visible: TupleStore.inCall || TupleStore.calling !== ""; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: TupleStore.inCall || TupleStore.calling !== ""; foreground: root.foreground }
 
           Column {
             visible: TupleStore.inCall || TupleStore.calling !== ""
-            width: parent.width
+            Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
             spacing: Style.space(8)
 
             PanelSectionHeader {
@@ -483,14 +484,18 @@ Panel {
           }
 
           // -------------------------------------------------------- rooms
-          PanelSeparator { visible: root.ready; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.ready; foreground: root.foreground }
 
-          Column {
+          ColumnLayout {
             visible: root.ready
-            width: parent.width
+            Layout.fillWidth: true
+            // Layouts only resize fillHeight items; the room list's own
+            // maximum stops this section from growing past it.
+            Layout.fillHeight: true
             spacing: Style.space(8)
 
             PanelSectionHeader {
+              Layout.minimumHeight: implicitHeight
               text: "ROOMS"
               foreground: root.foreground
               fontFamily: root.fontFamily
@@ -499,7 +504,8 @@ Panel {
             // One field: typing filters rooms and people, a pasted link joins on Enter.
             TextField {
               id: searchField
-              width: parent.width
+              Layout.fillWidth: true
+              Layout.minimumHeight: implicitHeight
               onActiveFocusChanged: root.editorsFocused += activeFocus ? 1 : -1
               foreground: root.foreground
               placeholderText: "Search, or paste a link to join (/)"
@@ -509,41 +515,33 @@ Panel {
 
             Text {
               visible: root.rooms.length === 0
-              width: parent.width
-              text: root.search !== "" ? "No rooms match." : "No favorite rooms. Search to find one."
+              Layout.fillWidth: true
+              text: root.search !== "" ? "No rooms match." : "No rooms yet."
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
               wrapMode: Text.WordWrap
             }
 
-            Column {
-              id: roomColumn
-              width: parent.width
-              spacing: Style.space(6)
-
-              Repeater {
-                model: root.rooms
-                RoomRow {
-                  required property var modelData
-                  required property int index
-                  width: roomColumn.width
-                  room: modelData
-                  rowIndex: index
-                }
-              }
+            // Your room, then favorites A to Z, then the rest: one list that
+            // scrolls on its own, like People.
+            RoomList {
+              id: roomList
+              model: root.rooms
             }
           }
 
           // ------------------------------------------------------- people
-          PanelSeparator { visible: root.ready; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.ready; foreground: root.foreground }
 
-          Column {
+          ColumnLayout {
             visible: root.ready
-            width: parent.width
+            Layout.fillWidth: true
+            Layout.fillHeight: true
             spacing: Style.space(8)
 
             PanelSectionHeader {
+              Layout.minimumHeight: implicitHeight
               text: "PEOPLE"
               foreground: root.foreground
               fontFamily: root.fontFamily
@@ -551,28 +549,34 @@ Panel {
 
             Text {
               visible: root.people.length === 0
-              width: parent.width
-              text: root.search !== "" ? "Nobody matches." : "No favorites or teammates online. Search to find anyone."
+              Layout.fillWidth: true
+              text: root.search !== "" ? "Nobody matches." : "No contacts yet."
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
               wrapMode: Text.WordWrap
             }
 
-            Column {
-              id: peopleColumn
-              width: parent.width
+            ListView {
+              id: peopleList
+              Layout.fillWidth: true
+              Layout.fillHeight: true
+              // Asks for no more than its minimum; fillHeight hands it the rest.
+              Layout.minimumHeight: Style.space(120)
+              Layout.preferredHeight: Style.space(120)
+              clip: true
               spacing: Style.space(6)
-
-              Repeater {
-                model: root.people
-                PersonRow {
-                  required property var modelData
-                  required property int index
-                  width: peopleColumn.width
-                  person: modelData
-                  rowIndex: index
-                }
+              boundsBehavior: Flickable.StopAtBounds
+              model: root.people
+              ScrollBar.vertical: ScrollBar {
+                policy: peopleList.contentHeight > peopleList.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+              }
+              delegate: PersonRow {
+                required property var modelData
+                required property int index
+                width: ListView.view.width
+                person: modelData
+                rowIndex: index
               }
             }
           }
@@ -580,7 +584,8 @@ Panel {
           // ------------------------------------------------------- footer
           Item {
             visible: TupleStore.probed
-            width: parent.width
+            Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
             implicitHeight: Math.max(footerText.implicitHeight, footerActions.implicitHeight)
 
             Text {
@@ -636,6 +641,32 @@ Panel {
   }
 
   // ------------------------------------------------------------ components
+
+  // Up to four and a half rows, so a cut-off row shows there is more to
+  // scroll; the layout may squeeze it to one and a half to keep the footer.
+  component RoomList: ListView {
+    id: list
+    readonly property real pitch: count > 0 ? (contentHeight + spacing) / count : 0
+    visible: count > 0
+    Layout.fillWidth: true
+    Layout.fillHeight: true
+    Layout.preferredHeight: Layout.maximumHeight
+    Layout.maximumHeight: Math.min(contentHeight, pitch * 4.5 - spacing)
+    Layout.minimumHeight: Math.min(contentHeight, pitch * 1.5 - spacing)
+    clip: true
+    spacing: Style.space(6)
+    boundsBehavior: Flickable.StopAtBounds
+    // Always shown while there is more, so a list cut on a row boundary still
+    // reads as scrollable.
+    ScrollBar.vertical: ScrollBar { policy: list.contentHeight > list.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff }
+    delegate: RoomRow {
+      required property var modelData
+      required property int index
+      width: ListView.view.width
+      room: modelData
+      rowIndex: index
+    }
+  }
 
   component RoomRow: CursorSurface {
     id: roomRow

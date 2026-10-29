@@ -262,8 +262,14 @@ def main() -> int:
             (directory / f"{index:02d}-{safe}.json").write_text(json.dumps(state, indent=2, default=str))
 
         recorded.append(step)
-        QTimer.singleShot(max(0, delay - 50), record)
-        QTimer.singleShot(delay, run_next)
+
+        def finish_step():
+            # One timer for both, so a step's dump can never land after the
+            # next step has started; Qt's coarse timers may fire 5% early or late.
+            record()
+            run_next()
+
+        QTimer.singleShot(delay, finish_step)
 
     if args.open_panel:
         QTimer.singleShot(args.settle, harness.openPanel)
