@@ -31,10 +31,15 @@ Panel {
   // that has not connected yet is treated as ringing.
   readonly property bool ringing: TupleStore.inCall && !TupleStore.connected && TupleStore.calling === ""
   readonly property var rooms: ready ? Model.visibleRooms(TupleStore.rooms, search) : []
+  // Your room and favorites, then every other room, each in its own capped
+  // list so neither can push People off the panel.
+  readonly property var favRooms: rooms.filter(function(r) { return r.personal || r.favorite })
+  readonly property var otherRooms: rooms.filter(function(r) { return !r.personal && !r.favorite })
   readonly property var people: ready ? Model.visibleContacts(TupleStore.contacts, search) : []
   property string search: ""
 
   property string focusSection: "header"
+  property int favRoomIndex: 0
   property int roomIndex: 0
   property int personIndex: 0
   property bool cursorActive: false
@@ -56,21 +61,28 @@ Panel {
   function sectionOrder() {
     var order = ["header"]
     if (TupleStore.inCall) order.push("call")
-    if (rooms.length > 0) order.push("rooms")
+    if (favRooms.length > 0) order.push("favRooms")
+    if (otherRooms.length > 0) order.push("rooms")
     if (people.length > 0) order.push("people")
     return order
   }
 
+  function sectionList(section) {
+    return section === "favRooms" ? favRooms : (section === "rooms" ? otherRooms : (section === "people" ? people : null))
+  }
+
   function sectionLength(section) {
-    return section === "rooms" ? rooms.length : (section === "people" ? people.length : 1)
+    var list = sectionList(section)
+    return list ? list.length : 1
   }
 
   function sectionIndex(section) {
-    return section === "rooms" ? roomIndex : (section === "people" ? personIndex : 0)
+    return section === "favRooms" ? favRoomIndex : (section === "rooms" ? roomIndex : (section === "people" ? personIndex : 0))
   }
 
   function setSectionIndex(section, value) {
-    if (section === "rooms") roomIndex = value
+    if (section === "favRooms") favRoomIndex = value
+    else if (section === "rooms") roomIndex = value
     else if (section === "people") personIndex = value
   }
 
@@ -105,8 +117,8 @@ Panel {
     } else if (focusSection === "call") {
       if (root.ringing) TupleStore.accept()
       else TupleStore.toggleMute()
-    } else if (focusSection === "rooms") {
-      TupleStore.joinRoom(rooms[roomIndex])
+    } else if (focusSection === "favRooms" || focusSection === "rooms") {
+      TupleStore.joinRoom(sectionList(focusSection)[sectionIndex(focusSection)])
     } else if (focusSection === "people") {
       TupleStore.callPerson(people[personIndex])
     }
@@ -119,17 +131,9 @@ Panel {
   }
 
   function scrollCursorIntoView() {
-    var column = focusSection === "rooms" ? roomColumn : (focusSection === "people" ? peopleColumn : null)
-    var item = column ? column.children[sectionIndex(focusSection)] : null
-    if (!item) return
-    Qt.callLater(function() {
-      var top = item.mapToItem(panelFlick.contentItem, 0, 0).y
-      var margin = Style.space(6)
-      if (top < panelFlick.contentY + margin) panelFlick.contentY = Math.max(0, top - margin)
-      else if (top + item.height > panelFlick.contentY + panelFlick.height - margin)
-        panelFlick.contentY = Math.min(Math.max(0, panelFlick.contentHeight - panelFlick.height),
-          top + item.height + margin - panelFlick.height)
-    })
+    var view = focusSection === "favRooms" ? favRoomList : (focusSection === "rooms" ? otherRoomList
+      : (focusSection === "people" ? peopleList : null))
+    if (view) view.positionViewAtIndex(sectionIndex(focusSection), ListView.Contain)
   }
 
   implicitWidth: button.implicitWidth
@@ -137,11 +141,14 @@ Panel {
 
   onOpenedChanged: if (opened) {
     cursorActive = false
-    panelFlick.contentY = 0
+    favRoomList.positionViewAtBeginning()
+    otherRoomList.positionViewAtBeginning()
+    peopleList.positionViewAtBeginning()
     if (!TupleStore.installed) TupleStore.probe()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
-  onRoomsChanged: ensureCursor()
+  onFavRoomsChanged: ensureCursor()
+  onOtherRoomsChanged: ensureCursor()
   onPeopleChanged: ensureCursor()
 
   IpcHandler {
@@ -170,7 +177,7 @@ Panel {
       Item {
         TupleIcon {
           anchors.centerIn: parent
-          iconSize: Style.space(12)
+          iconSize: Style.bar.iconCanvas
           color: root.ready ? root.barForeground : Qt.darker(root.barForeground, 1.55)
           badgeColor: root.urgent
           filled: TupleStore.inCall
@@ -193,7 +200,9 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(380))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(620))
+    // Signed in, the panel keeps one height and its content scrolls, so
+    // searching never resizes it. Setup and sign-in fit their few lines.
+    contentHeight: panel.fittedContentHeight(root.ready ? Style.space(620) : column.implicitHeight, Style.space(620))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -215,25 +224,22 @@ Panel {
         else if (key === "/" && root.ready) searchField.forceActiveFocus()
       }
 
-      Flickable {
-        id: panelFlick
+      // The panel itself does not scroll: each list scrolls on its own, and
+      // People takes whatever height is left.
+      Item {
         anchors.fill: parent
-        contentWidth: width
-        contentHeight: column.implicitHeight
         clip: true
-        boundsBehavior: Flickable.StopAtBounds
-        interactive: contentHeight > height
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-        Column {
+        ColumnLayout {
           id: column
-          width: panelFlick.width
+          width: parent.width
+          height: root.ready ? parent.height : implicitHeight
           spacing: Style.space(12)
 
           // ------------------------------------------------------- header
           PanelHero {
             id: hero
-            width: parent.width
+            Layout.fillWidth: true
             title: TupleStore.user ? TupleStore.user.name : "Tuple"
             meta: TupleStore.summary
             detail: TupleStore.installed && TupleStore.loggedIn && !TupleStore.online ? "OFFLINE" : ""
@@ -271,7 +277,7 @@ Panel {
 
           Text {
             visible: text !== ""
-            width: parent.width
+            Layout.fillWidth: true
             text: TupleStore.error !== "" ? TupleStore.error : TupleStore.status
             color: TupleStore.error !== "" ? root.urgent : root.dim
             font.family: root.fontFamily
@@ -283,7 +289,7 @@ Panel {
           // -------------------------------------------------------- setup
           Column {
             visible: TupleStore.probed && !TupleStore.installed
-            width: parent.width
+            Layout.fillWidth: true
             spacing: Style.space(8)
 
             Text {
@@ -310,7 +316,7 @@ Panel {
           // ------------------------------------------------------ sign in
           Column {
             visible: TupleStore.installed && TupleStore.daemonRunning && !TupleStore.loggedIn
-            width: parent.width
+            Layout.fillWidth: true
             spacing: Style.space(8)
 
             Text {
@@ -379,11 +385,11 @@ Panel {
           }
 
           // --------------------------------------------------------- call
-          PanelSeparator { visible: TupleStore.inCall || TupleStore.calling !== ""; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; visible: TupleStore.inCall || TupleStore.calling !== ""; foreground: root.foreground }
 
           Column {
             visible: TupleStore.inCall || TupleStore.calling !== ""
-            width: parent.width
+            Layout.fillWidth: true
             spacing: Style.space(8)
 
             PanelSectionHeader {
@@ -483,11 +489,11 @@ Panel {
           }
 
           // -------------------------------------------------------- rooms
-          PanelSeparator { visible: root.ready; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; visible: root.ready; foreground: root.foreground }
 
           Column {
             visible: root.ready
-            width: parent.width
+            Layout.fillWidth: true
             spacing: Style.space(8)
 
             PanelSectionHeader {
@@ -510,37 +516,43 @@ Panel {
             Text {
               visible: root.rooms.length === 0
               width: parent.width
-              text: root.search !== "" ? "No rooms match." : "No favorite rooms. Search to find one."
+              text: root.search !== "" ? "No rooms match." : "No rooms yet."
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
               wrapMode: Text.WordWrap
             }
 
-            Column {
-              id: roomColumn
+            RoomList {
+              id: favRoomList
               width: parent.width
-              spacing: Style.space(6)
+              model: root.favRooms
+              section: "favRooms"
+            }
 
-              Repeater {
-                model: root.rooms
-                RoomRow {
-                  required property var modelData
-                  required property int index
-                  width: roomColumn.width
-                  room: modelData
-                  rowIndex: index
-                }
-              }
+            Text {
+              visible: root.favRooms.length > 0 && root.otherRooms.length > 0
+              text: "OTHER ROOMS"
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+
+            RoomList {
+              id: otherRoomList
+              width: parent.width
+              model: root.otherRooms
+              section: "rooms"
             }
           }
 
           // ------------------------------------------------------- people
-          PanelSeparator { visible: root.ready; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; visible: root.ready; foreground: root.foreground }
 
-          Column {
+          ColumnLayout {
             visible: root.ready
-            width: parent.width
+            Layout.fillWidth: true
+            Layout.fillHeight: true
             spacing: Style.space(8)
 
             PanelSectionHeader {
@@ -551,28 +563,30 @@ Panel {
 
             Text {
               visible: root.people.length === 0
-              width: parent.width
-              text: root.search !== "" ? "Nobody matches." : "No favorites or teammates online. Search to find anyone."
+              Layout.fillWidth: true
+              text: root.search !== "" ? "Nobody matches." : "No contacts yet."
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
               wrapMode: Text.WordWrap
             }
 
-            Column {
-              id: peopleColumn
-              width: parent.width
+            ListView {
+              id: peopleList
+              Layout.fillWidth: true
+              Layout.fillHeight: true
+              Layout.minimumHeight: Style.space(120)
+              clip: true
               spacing: Style.space(6)
-
-              Repeater {
-                model: root.people
-                PersonRow {
-                  required property var modelData
-                  required property int index
-                  width: peopleColumn.width
-                  person: modelData
-                  rowIndex: index
-                }
+              boundsBehavior: Flickable.StopAtBounds
+              model: root.people
+              ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+              delegate: PersonRow {
+                required property var modelData
+                required property int index
+                width: ListView.view.width
+                person: modelData
+                rowIndex: index
               }
             }
           }
@@ -580,7 +594,7 @@ Panel {
           // ------------------------------------------------------- footer
           Item {
             visible: TupleStore.probed
-            width: parent.width
+            Layout.fillWidth: true
             implicitHeight: Math.max(footerText.implicitHeight, footerActions.implicitHeight)
 
             Text {
@@ -637,12 +651,32 @@ Panel {
 
   // ------------------------------------------------------------ components
 
+  // About three and a half rows, so a cut-off row shows there is more to scroll.
+  component RoomList: ListView {
+    property string section: "rooms"
+    visible: count > 0
+    height: Math.min(contentHeight, Style.space(126))
+    clip: true
+    spacing: Style.space(6)
+    boundsBehavior: Flickable.StopAtBounds
+    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+    delegate: RoomRow {
+      required property var modelData
+      required property int index
+      width: ListView.view.width
+      room: modelData
+      rowIndex: index
+      section: ListView.view.section
+    }
+  }
+
   component RoomRow: CursorSurface {
     id: roomRow
     property var room: null
     property int rowIndex: 0
+    property string section: "rooms"
 
-    hasCursor: root.cursorActive && root.focusSection === "rooms" && root.roomIndex === rowIndex
+    hasCursor: root.cursorActive && root.focusSection === section && root.sectionIndex(section) === rowIndex
     current: room && room.active
     foreground: root.foreground
     fill: root.hoverFill
@@ -653,7 +687,7 @@ Panel {
       anchors.fill: parent
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
-      onEntered: root.setCursor("rooms", roomRow.rowIndex)
+      onEntered: root.setCursor(roomRow.section, roomRow.rowIndex)
       onClicked: TupleStore.joinRoom(roomRow.room)
     }
 

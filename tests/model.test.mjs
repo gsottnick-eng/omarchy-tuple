@@ -84,13 +84,11 @@ test("contacts sort favorites first, then reachable people, then by name", () =>
   assert.ok(contacts.some((c) => c.joinable), "a busy contact in a joinable call is marked")
 })
 
-test("the people list shows favorites and reachable contacts, and searches the rest", () => {
+test("the people list shows everyone in sorted order, and a search narrows it", () => {
   const contacts = Model.parseContacts(fixture("contacts.json"))
-  const visible = Model.visibleContacts(contacts, "")
-  assert.ok(visible.length < contacts.length)
-  assert.ok(visible.every((c) => c.favorite || c.status !== "unknown"))
+  assert.deepEqual(Model.visibleContacts(contacts, ""), contacts)
   const offline = contacts.find((c) => !c.favorite && c.status === "unknown")
-  assert.deepEqual(Model.visibleContacts(contacts, offline.name.slice(0, 4).toUpperCase()).map((c) => c.id).includes(offline.id), true)
+  assert.deepEqual(Model.visibleContacts(contacts, offline.name.slice(0, 4).toUpperCase()).map((c) => c.id), [offline.id])
   assert.equal(Model.visibleContacts(contacts, "@example.com").length, contacts.length)
 })
 
@@ -104,12 +102,12 @@ test("rooms put the personal room first, then favorites, then occupied", () => {
   assert.ok(rooms.every((r) => r.url.endsWith("/" + r.slug)))
 })
 
-test("the room list shows yours, favorites and rooms in use, and searches the rest", () => {
+test("the room list shows every room, and a search narrows it", () => {
   const rooms = Model.parseRooms(fixture("rooms.json"))
   const shown = Model.visibleRooms(rooms, "")
-  assert.deepEqual(shown.map((r) => r.slug), rooms.filter((r) => r.personal || r.favorite || r.active).map((r) => r.slug))
-  const hidden = rooms.find((r) => !shown.includes(r))
-  assert.deepEqual(Model.visibleRooms(rooms, hidden.name.toUpperCase()).map((r) => r.slug), [hidden.slug])
+  assert.deepEqual(shown, rooms)
+  const plain = rooms.find((r) => !r.personal && !r.favorite && !r.active)
+  assert.deepEqual(Model.visibleRooms(rooms, plain.name.toUpperCase()).map((r) => r.slug), [plain.slug])
   assert.deepEqual(Model.visibleRooms(rooms, "https://tuple.example/c/room-1"), shown, "a pasted link is not a search")
   const contacts = Model.parseContacts(fixture("contacts.json"))
   assert.deepEqual(Model.visibleContacts(contacts, "https://tuple.example/c/room-1"), Model.visibleContacts(contacts, ""))

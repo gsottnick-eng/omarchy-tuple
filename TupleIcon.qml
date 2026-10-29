@@ -16,15 +16,18 @@ Item {
   implicitWidth: iconSize
   implicitHeight: iconSize
 
-  readonly property real ring: Math.max(6, iconSize * 0.66)
+  // Two rings overlapping by 42% span at most iconSize, so nothing is drawn
+  // outside the item, and whole pixels keep small rings round in the bar.
+  readonly property real ring: Math.max(4, Math.floor(iconSize / 1.58))
   readonly property real stroke: Math.max(1, Math.round(iconSize * 0.1))
   readonly property real overlap: ring * 0.42
 
   Item {
     id: mark
-    width: root.ring * 2 - root.overlap
+    width: Math.round(root.ring * 2 - root.overlap)
     height: root.ring
-    anchors.centerIn: parent
+    x: Math.round((parent.width - width) / 2)
+    y: Math.round((parent.height - height) / 2)
 
     Rectangle {
       width: root.ring
