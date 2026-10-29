@@ -31,15 +31,10 @@ Panel {
   // that has not connected yet is treated as ringing.
   readonly property bool ringing: TupleStore.inCall && !TupleStore.connected && TupleStore.calling === ""
   readonly property var rooms: ready ? Model.visibleRooms(TupleStore.rooms, search) : []
-  // Your room and favorites, then every other room, each in its own capped
-  // list so neither can push People off the panel.
-  readonly property var favRooms: rooms.filter(function(r) { return r.personal || r.favorite })
-  readonly property var otherRooms: rooms.filter(function(r) { return !r.personal && !r.favorite })
   readonly property var people: ready ? Model.visibleContacts(TupleStore.contacts, search) : []
   property string search: ""
 
   property string focusSection: "header"
-  property int favRoomIndex: 0
   property int roomIndex: 0
   property int personIndex: 0
   property bool cursorActive: false
@@ -61,14 +56,13 @@ Panel {
   function sectionOrder() {
     var order = ["header"]
     if (TupleStore.inCall) order.push("call")
-    if (favRooms.length > 0) order.push("favRooms")
-    if (otherRooms.length > 0) order.push("rooms")
+    if (rooms.length > 0) order.push("rooms")
     if (people.length > 0) order.push("people")
     return order
   }
 
   function sectionList(section) {
-    return section === "favRooms" ? favRooms : (section === "rooms" ? otherRooms : (section === "people" ? people : null))
+    return section === "rooms" ? rooms : (section === "people" ? people : null)
   }
 
   function sectionLength(section) {
@@ -77,12 +71,11 @@ Panel {
   }
 
   function sectionIndex(section) {
-    return section === "favRooms" ? favRoomIndex : (section === "rooms" ? roomIndex : (section === "people" ? personIndex : 0))
+    return section === "rooms" ? roomIndex : (section === "people" ? personIndex : 0)
   }
 
   function setSectionIndex(section, value) {
-    if (section === "favRooms") favRoomIndex = value
-    else if (section === "rooms") roomIndex = value
+    if (section === "rooms") roomIndex = value
     else if (section === "people") personIndex = value
   }
 
@@ -117,8 +110,8 @@ Panel {
     } else if (focusSection === "call") {
       if (root.ringing) TupleStore.accept()
       else TupleStore.toggleMute()
-    } else if (focusSection === "favRooms" || focusSection === "rooms") {
-      TupleStore.joinRoom(sectionList(focusSection)[sectionIndex(focusSection)])
+    } else if (focusSection === "rooms") {
+      TupleStore.joinRoom(rooms[roomIndex])
     } else if (focusSection === "people") {
       TupleStore.callPerson(people[personIndex])
     }
@@ -131,8 +124,7 @@ Panel {
   }
 
   function scrollCursorIntoView() {
-    var view = focusSection === "favRooms" ? favRoomList : (focusSection === "rooms" ? otherRoomList
-      : (focusSection === "people" ? peopleList : null))
+    var view = focusSection === "rooms" ? roomList : (focusSection === "people" ? peopleList : null)
     if (view) view.positionViewAtIndex(sectionIndex(focusSection), ListView.Contain)
   }
 
@@ -141,14 +133,12 @@ Panel {
 
   onOpenedChanged: if (opened) {
     cursorActive = false
-    favRoomList.positionViewAtBeginning()
-    otherRoomList.positionViewAtBeginning()
+    roomList.positionViewAtBeginning()
     peopleList.positionViewAtBeginning()
     if (!TupleStore.installed) TupleStore.probe()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
-  onFavRoomsChanged: ensureCursor()
-  onOtherRoomsChanged: ensureCursor()
+  onRoomsChanged: ensureCursor()
   onPeopleChanged: ensureCursor()
 
   IpcHandler {
@@ -499,8 +489,8 @@ Panel {
           ColumnLayout {
             visible: root.ready
             Layout.fillWidth: true
-            // Layouts only resize fillHeight items; the room lists' own
-            // maximums stop this section from growing past them.
+            // Layouts only resize fillHeight items; the room list's own
+            // maximum stops this section from growing past it.
             Layout.fillHeight: true
             spacing: Style.space(8)
 
@@ -533,25 +523,11 @@ Panel {
               wrapMode: Text.WordWrap
             }
 
+            // Your room, then favorites A to Z, then the rest: one list that
+            // scrolls on its own, like People.
             RoomList {
-              id: favRoomList
-              model: root.favRooms
-              section: "favRooms"
-            }
-
-            Text {
-              visible: root.favRooms.length > 0 && root.otherRooms.length > 0
-              Layout.minimumHeight: implicitHeight
-              text: "OTHER ROOMS"
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-            }
-
-            RoomList {
-              id: otherRoomList
-              model: root.otherRooms
-              section: "rooms"
+              id: roomList
+              model: root.rooms
             }
           }
 
@@ -666,17 +642,16 @@ Panel {
 
   // ------------------------------------------------------------ components
 
-  // Up to three and a half rows, so a cut-off row shows there is more to
+  // Up to four and a half rows, so a cut-off row shows there is more to
   // scroll; the layout may squeeze it to one and a half to keep the footer.
   component RoomList: ListView {
     id: list
-    property string section: "rooms"
     readonly property real pitch: count > 0 ? (contentHeight + spacing) / count : 0
     visible: count > 0
     Layout.fillWidth: true
     Layout.fillHeight: true
     Layout.preferredHeight: Layout.maximumHeight
-    Layout.maximumHeight: Math.min(contentHeight, pitch * 3.5 - spacing)
+    Layout.maximumHeight: Math.min(contentHeight, pitch * 4.5 - spacing)
     Layout.minimumHeight: Math.min(contentHeight, pitch * 1.5 - spacing)
     clip: true
     spacing: Style.space(6)
@@ -690,7 +665,6 @@ Panel {
       width: ListView.view.width
       room: modelData
       rowIndex: index
-      section: ListView.view.section
     }
   }
 
@@ -698,9 +672,8 @@ Panel {
     id: roomRow
     property var room: null
     property int rowIndex: 0
-    property string section: "rooms"
 
-    hasCursor: root.cursorActive && root.focusSection === section && root.sectionIndex(section) === rowIndex
+    hasCursor: root.cursorActive && root.focusSection === "rooms" && root.roomIndex === rowIndex
     current: room && room.active
     foreground: root.foreground
     fill: root.hoverFill
@@ -711,7 +684,7 @@ Panel {
       anchors.fill: parent
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
-      onEntered: root.setCursor(roomRow.section, roomRow.rowIndex)
+      onEntered: root.setCursor("rooms", roomRow.rowIndex)
       onClicked: TupleStore.joinRoom(roomRow.room)
     }
 

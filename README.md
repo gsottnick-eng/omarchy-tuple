@@ -8,9 +8,8 @@ rooms, your people, and call controls, one click from the bar.
 
 ## Features
 
-- **Rooms**: your room and favorites in one list, every other room in a second
-  list below it (rooms in use first). Each list scrolls on its own, so neither
-  grows past a few rows. One click to join.
+- **Rooms**: one scrolling list with your room first, then favorites A to Z,
+  then rooms in use and everything else. One click to join.
 - **People**: everyone, with favorites and anyone online or in a call at the
   top. Click to call them, or to join the call they're in.
 - **Search**: one field finds any room or person. Paste a call link into it
