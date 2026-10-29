@@ -133,6 +133,9 @@ Singleton {
   }
 
   function applyState(line) {
+    // A line already in flight when Stop closed the stream must not mark the
+    // daemon as running again.
+    if (stoppedByUser) return
     var s = Model.parseState(line)
     if (!s) return
     restartTimer.interval = 1000

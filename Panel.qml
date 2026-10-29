@@ -12,8 +12,8 @@ import "Model.js" as Model
 // for every monitor.
 Panel {
   id: root
-  moduleName: "io.github.gsottnick-eng.tuple"
-  ipcTarget: "io.github.gsottnick-eng.tuple"
+  moduleName: "io.github.gsottnick.tuple"
+  ipcTarget: "io.github.gsottnick.tuple"
   // The handler below adds call verbs to open/close. Built once per monitor,
   // only the first registers; the rest log a warning, as first-party widgets do.
   manageIpc: false

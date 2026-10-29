@@ -48,9 +48,9 @@ Right-click the bar icon during a call to mute.
 ### Bind keys to calls
 
 ```bash
-omarchy-shell io.github.gsottnick-eng.tuple mute
-omarchy-shell io.github.gsottnick-eng.tuple leave
-omarchy-shell io.github.gsottnick-eng.tuple toggle
+omarchy-shell io.github.gsottnick.tuple mute
+omarchy-shell io.github.gsottnick.tuple leave
+omarchy-shell io.github.gsottnick.tuple toggle
 ```
 
 Also `share`, `accept`, `join <link>`, `status`, `open`, `close`, and `diagnose`.
@@ -71,7 +71,7 @@ omarchy plugin add https://github.com/gsottnick/omarchy-tuple.git --enable
 The widget lands on the right of the bar. Move it with:
 
 ```bash
-omarchy bar move io.github.gsottnick-eng.tuple --section left
+omarchy bar move io.github.gsottnick.tuple --section left
 ```
 
 Open the dropdown. If Tuple isn't installed, it offers to install it. Then
@@ -108,8 +108,8 @@ Run it yourself if you'd rather:
 From the command line:
 
 ```bash
-omarchy bar set io.github.gsottnick-eng.tuple showLabel true
-omarchy bar set io.github.gsottnick-eng.tuple callAlerts false
+omarchy bar set io.github.gsottnick.tuple showLabel true
+omarchy bar set io.github.gsottnick.tuple callAlerts false
 ```
 
 Tuplet stores nothing about your account. Your rooms, people, and who you're
@@ -118,7 +118,7 @@ signed in as come from Tuple every time.
 ## Remove
 
 ```bash
-omarchy plugin remove io.github.gsottnick-eng.tuple
+omarchy plugin remove io.github.gsottnick.tuple
 ```
 
 That removes the widget and its settings. The Tuple client stays, since you
@@ -152,7 +152,7 @@ These are bugs outside Tuplet. Each says who has to fix it.
 ## Getting help
 
 Click the bug button in the panel, or run
-`omarchy-shell io.github.gsottnick-eng.tuple diagnose`. Omarchy opens your default
+`omarchy-shell io.github.gsottnick.tuple diagnose`. Omarchy opens your default
 coding agent with what Tuplet knows about the problem and a guide for
 diagnosing it ([`agents/diagnose/SKILL.md`](agents/diagnose/SKILL.md)). The
 agent works out whether it's Tuplet's bug, Tuple's, or Omarchy's. If it's
