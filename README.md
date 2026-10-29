@@ -74,6 +74,16 @@ The widget lands on the right of the bar. Move it with:
 omarchy bar move io.github.gsottnick.tuple --section left
 ```
 
+Installed before the plugin id changed (`io.github.gsottnick-eng.tuple`)?
+Remove it under the old id and add it again; your Tuple sign-in is unaffected:
+
+```bash
+omarchy plugin remove io.github.gsottnick-eng.tuple
+omarchy plugin add https://github.com/gsottnick/omarchy-tuple.git --enable
+```
+
+Then update any keybindings that call `omarchy-shell io.github.gsottnick-eng.tuple`.
+
 Open the dropdown. If Tuple isn't installed, it offers to install it. Then
 **Sign in**: your browser opens Tuple's sign-in page, and you paste the
 authorization code it gives you back into the panel.
