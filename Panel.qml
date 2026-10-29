@@ -240,6 +240,7 @@ Panel {
           PanelHero {
             id: hero
             Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
             title: TupleStore.user ? TupleStore.user.name : "Tuple"
             meta: TupleStore.summary
             detail: TupleStore.installed && TupleStore.loggedIn && !TupleStore.online ? "OFFLINE" : ""
@@ -278,6 +279,7 @@ Panel {
           Text {
             visible: text !== ""
             Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
             text: TupleStore.error !== "" ? TupleStore.error : TupleStore.status
             color: TupleStore.error !== "" ? root.urgent : root.dim
             font.family: root.fontFamily
@@ -290,6 +292,7 @@ Panel {
           Column {
             visible: TupleStore.probed && !TupleStore.installed
             Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
             spacing: Style.space(8)
 
             Text {
@@ -317,6 +320,7 @@ Panel {
           Column {
             visible: TupleStore.installed && TupleStore.daemonRunning && !TupleStore.loggedIn
             Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
             spacing: Style.space(8)
 
             Text {
@@ -385,11 +389,12 @@ Panel {
           }
 
           // --------------------------------------------------------- call
-          PanelSeparator { Layout.fillWidth: true; visible: TupleStore.inCall || TupleStore.calling !== ""; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: TupleStore.inCall || TupleStore.calling !== ""; foreground: root.foreground }
 
           Column {
             visible: TupleStore.inCall || TupleStore.calling !== ""
             Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
             spacing: Style.space(8)
 
             PanelSectionHeader {
@@ -489,14 +494,18 @@ Panel {
           }
 
           // -------------------------------------------------------- rooms
-          PanelSeparator { Layout.fillWidth: true; visible: root.ready; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.ready; foreground: root.foreground }
 
-          Column {
+          ColumnLayout {
             visible: root.ready
             Layout.fillWidth: true
+            // Layouts only resize fillHeight items; the room lists' own
+            // maximums stop this section from growing past them.
+            Layout.fillHeight: true
             spacing: Style.space(8)
 
             PanelSectionHeader {
+              Layout.minimumHeight: implicitHeight
               text: "ROOMS"
               foreground: root.foreground
               fontFamily: root.fontFamily
@@ -505,7 +514,8 @@ Panel {
             // One field: typing filters rooms and people, a pasted link joins on Enter.
             TextField {
               id: searchField
-              width: parent.width
+              Layout.fillWidth: true
+              Layout.minimumHeight: implicitHeight
               onActiveFocusChanged: root.editorsFocused += activeFocus ? 1 : -1
               foreground: root.foreground
               placeholderText: "Search, or paste a link to join (/)"
@@ -515,7 +525,7 @@ Panel {
 
             Text {
               visible: root.rooms.length === 0
-              width: parent.width
+              Layout.fillWidth: true
               text: root.search !== "" ? "No rooms match." : "No rooms yet."
               color: root.dim
               font.family: root.fontFamily
@@ -525,13 +535,13 @@ Panel {
 
             RoomList {
               id: favRoomList
-              width: parent.width
               model: root.favRooms
               section: "favRooms"
             }
 
             Text {
               visible: root.favRooms.length > 0 && root.otherRooms.length > 0
+              Layout.minimumHeight: implicitHeight
               text: "OTHER ROOMS"
               color: root.dim
               font.family: root.fontFamily
@@ -540,14 +550,13 @@ Panel {
 
             RoomList {
               id: otherRoomList
-              width: parent.width
               model: root.otherRooms
               section: "rooms"
             }
           }
 
           // ------------------------------------------------------- people
-          PanelSeparator { Layout.fillWidth: true; visible: root.ready; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.ready; foreground: root.foreground }
 
           ColumnLayout {
             visible: root.ready
@@ -556,6 +565,7 @@ Panel {
             spacing: Style.space(8)
 
             PanelSectionHeader {
+              Layout.minimumHeight: implicitHeight
               text: "PEOPLE"
               foreground: root.foreground
               fontFamily: root.fontFamily
@@ -575,12 +585,16 @@ Panel {
               id: peopleList
               Layout.fillWidth: true
               Layout.fillHeight: true
+              // Asks for no more than its minimum; fillHeight hands it the rest.
               Layout.minimumHeight: Style.space(120)
+              Layout.preferredHeight: Style.space(120)
               clip: true
               spacing: Style.space(6)
               boundsBehavior: Flickable.StopAtBounds
               model: root.people
-              ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+              ScrollBar.vertical: ScrollBar {
+                policy: peopleList.contentHeight > peopleList.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+              }
               delegate: PersonRow {
                 required property var modelData
                 required property int index
@@ -595,6 +609,7 @@ Panel {
           Item {
             visible: TupleStore.probed
             Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
             implicitHeight: Math.max(footerText.implicitHeight, footerActions.implicitHeight)
 
             Text {
@@ -651,15 +666,24 @@ Panel {
 
   // ------------------------------------------------------------ components
 
-  // About three and a half rows, so a cut-off row shows there is more to scroll.
+  // Up to three and a half rows, so a cut-off row shows there is more to
+  // scroll; the layout may squeeze it to one and a half to keep the footer.
   component RoomList: ListView {
+    id: list
     property string section: "rooms"
+    readonly property real pitch: count > 0 ? (contentHeight + spacing) / count : 0
     visible: count > 0
-    height: Math.min(contentHeight, Style.space(126))
+    Layout.fillWidth: true
+    Layout.fillHeight: true
+    Layout.preferredHeight: Layout.maximumHeight
+    Layout.maximumHeight: Math.min(contentHeight, pitch * 3.5 - spacing)
+    Layout.minimumHeight: Math.min(contentHeight, pitch * 1.5 - spacing)
     clip: true
     spacing: Style.space(6)
     boundsBehavior: Flickable.StopAtBounds
-    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+    // Always shown while there is more, so a list cut on a row boundary still
+    // reads as scrollable.
+    ScrollBar.vertical: ScrollBar { policy: list.contentHeight > list.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff }
     delegate: RoomRow {
       required property var modelData
       required property int index

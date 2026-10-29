@@ -48,6 +48,30 @@ follow() {
   done
 }
 
+# With the `many` flag: a bigger account than the fixtures, to exercise list caps.
+many_rooms() {
+  printf '['
+  i=1
+  while [ $i -le 18 ]; do
+    fav=false; [ $i -le 4 ] && fav=true
+    [ $i -gt 1 ] && printf ','
+    printf '{"slug":"room-%s","name":"Room %s","http_value":"https://tuple.example/c/room-%s","favorited":%s,"members":[],"kind":"team","active_call":false}' $i $i $i $fav
+    i=$((i + 1))
+  done
+  printf ']\n'
+}
+
+many_contacts() {
+  printf '['
+  i=1
+  while [ $i -le 30 ]; do
+    [ $i -gt 1 ] && printf ','
+    printf '{"id":%s,"email":"person%s@example.com","full_name":"Person %s","short_name":"Person","kind":"teammate","favorited":false,"recent":false,"status":"unknown"}' $((2000 + i)) $i $i
+    i=$((i + 1))
+  done
+  printf ']\n'
+}
+
 need_login() { flag logged_in || fail "not signed in"; }
 need_call() { flag in_call || fail "not in a call"; }
 
@@ -57,8 +81,8 @@ case "$*" in
   "stop") set_flag stopped; echo "exiting" ;;
   "state follow --format json") clear_flag stopped; follow state_snapshot ;;
   "state follow --raw --format json") follow share_event ;;
-  "contacts follow --format json") need_login; compact "$FIXTURES/contacts.json"; while ! flag stopped; do sleep 0.2; done ;;
-  "rooms follow --format json") need_login; compact "$FIXTURES/rooms.json"; while ! flag stopped; do sleep 0.2; done ;;
+  "contacts follow --format json") need_login; if flag many; then many_contacts; else compact "$FIXTURES/contacts.json"; fi; while ! flag stopped; do sleep 0.2; done ;;
+  "rooms follow --format json") need_login; if flag many; then many_rooms; else compact "$FIXTURES/rooms.json"; fi; while ! flag stopped; do sleep 0.2; done ;;
   "login") cat "$FIXTURES/login.txt"; set_flag login_pending ;;
   "auth "*)
     flag login_pending || { echo "error: no auth session, run 'tuple login' first" >&2; exit 1; }
