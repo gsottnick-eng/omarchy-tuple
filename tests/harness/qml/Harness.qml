@@ -2,9 +2,11 @@ import QtQuick
 import Quickshell
 import qs.Commons
 import qs.Ui
+// The plugin folder itself, for the TupleStore singleton the panel shares.
+import "../../.." as Plugin
 
 // Hosts the Tuple bar widget in a stand-in Omarchy bar so the real plugin
-// entry point, the real Omarchy Ui components and the real Tuple client all
+// entry point, the real Omarchy Ui components and the fake Tuple client all
 // run together outside a Wayland session.
 QtObject {
   id: harness
@@ -13,16 +15,11 @@ QtObject {
   property var pluginSettings: ({})
 
   readonly property var plugin: pluginLoader.item
+  readonly property var store: Plugin.TupleStore
   readonly property var barModel: fakeBar
   readonly property bool ready: pluginLoader.status === Loader.Ready
 
-  property FakeBar fakeBar: FakeBar {
-    // Writes from the widget land back on the widget, the way Omarchy's
-    // shell.json round-trip behaves.
-    onEntryWritten: function(moduleName, entry) {
-      if (pluginLoader.item) pluginLoader.item.settings = entry
-    }
-  }
+  property FakeBar fakeBar: FakeBar {}
 
   function openPanel() { if (plugin) plugin.open() }
   function closePanel() { if (plugin) plugin.close() }

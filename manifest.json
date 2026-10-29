@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "io.github.gsottnick-eng.tuple",
   "name": "Tuplet",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": "Gavin Sottnick",
   "license": "MIT",
-  "description": "Tuplet installs Tuple and drives pair programming from the Omarchy bar: contacts, rooms, call controls, and every client setting in one dropdown.",
+  "description": "Tuplet installs Tuple and runs pair programming from the Omarchy bar: rooms, people, and call controls in one dropdown.",
   "kinds": [
     "bar-widget"
   ],
@@ -19,28 +19,10 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "refreshIntervalSec": 20,
-      "installDir": "~/.local/bin",
       "showLabel": false,
-      "savedRooms": [],
       "callAlerts": true
     },
     "schema": [
-      {
-        "key": "refreshIntervalSec",
-        "type": "integer",
-        "label": "Refresh interval (seconds)",
-        "min": 5,
-        "max": 600,
-        "step": 5,
-        "defaultValue": 20
-      },
-      {
-        "key": "installDir",
-        "type": "string",
-        "label": "Install directory for the Tuple binary",
-        "defaultValue": "~/.local/bin"
-      },
       {
         "key": "showLabel",
         "type": "boolean",
@@ -50,7 +32,7 @@
       {
         "key": "callAlerts",
         "type": "boolean",
-        "label": "Notify and play a sound when a call starts or ends",
+        "label": "Notify when a call starts or ends",
         "defaultValue": true
       }
     ]

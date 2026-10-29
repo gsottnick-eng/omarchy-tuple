@@ -1,0 +1,40 @@
+Tuple CLI for managing contacts, calls, and application state.
+
+Usage:
+  tuple [command]
+
+Available Commands:
+  agent         Agent operating guidance and communication
+  auth          Finish the login process
+  call          Call lifecycle
+  capture       Capture and inspect call history
+  completion    Generate the autocompletion script for the specified shell
+  connect       Connect an AI agent to Tuple
+  contacts      People and availability
+  help          Help about any command
+  login         Start the login process
+  logout        Log out
+  machines      List your other connected machines
+  mcp           Start MCP server over stdin/stdout
+  notifications External call notifications
+  rooms         Rooms and persistent spaces
+  screen        Capture the shared screen
+  start         Ensure the daemon is started
+  state         Show current application state
+  stop          Stop the daemon
+  version       Print the app version
+  whoami        Print the authenticated user's identity
+
+Deprecated Commands:
+  new           Start and join a new call with your personal URL
+  set           Update a setting with the given value
+  settings      List all settings and their values
+  share         Share your screen
+  ui            Show experimental debugging UI
+  unshare       Unshare your screen
+
+Flags:
+      --format format   output format: "text" or "json" (default text)
+  -h, --help            help for tuple
+
+Use "tuple [command] --help" for more information about a command.

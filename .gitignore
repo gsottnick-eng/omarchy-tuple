@@ -1,6 +1,4 @@
 .venv-harness/
-agent-tools/
 __pycache__/
 *.pyc
 tests/harness/.qsroot/
-tests/artifacts/
