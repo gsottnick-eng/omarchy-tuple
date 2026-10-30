@@ -29,8 +29,6 @@ Singleton {
   property bool installed: false
   property string binaryPath: ""
   property bool canShare: false
-  property bool canSettings: false
-  property var settings: ({})
 
   // ---------------------------------------------------------------- state
   property bool daemonRunning: false
@@ -168,7 +166,6 @@ Singleton {
       announcedParticipants = s.participants.filter(function(p) { return p.connected })
       pendingParticipants = null
       participantDebounce.stop()
-      _fetchSettings()
     } else if (wasInCall && s.inCall) {
       pendingParticipants = s.participants.filter(function(p) { return p.connected })
       participantDebounce.restart()
@@ -250,21 +247,6 @@ Singleton {
     pickerIssuedAt = new Date().getTime()
     pickerPending = true
     pickerTimer.restart()
-  }
-
-  // Read once when a call starts, so the toggles show what the client has.
-  function _fetchSettings() {
-    if (!canSettings || settingsProcess.running) return
-    settingsProcess.command = command(["settings"])
-    settingsProcess.running = true
-  }
-
-  function setSetting(name, value) {
-    if (!canSettings) return
-    var updated = settings
-    updated[name] = value
-    settings = updated
-    run(["set", name, value], "Saving setting…")
   }
 
   function leave() {
@@ -509,7 +491,6 @@ Singleton {
     stdout: StdioCollector { id: helpOut; waitForEnd: true }
     onExited: {
       root.canShare = Model.supportsShare(helpOut.text)
-      root.canSettings = Model.supportsSettings(helpOut.text)
     }
   }
 
@@ -553,14 +534,6 @@ Singleton {
       }
     }
     onExited: if (root.inCall) root._streamEnded()
-  }
-
-  Process {
-    id: settingsProcess
-    stdout: StdioCollector { id: settingsOut; waitForEnd: true }
-    onExited: function(exitCode) {
-      if (exitCode === 0) root.settings = Model.parseSettings(String(settingsOut.text || ""))
-    }
   }
 
   Process {

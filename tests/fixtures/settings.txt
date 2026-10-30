@@ -1,3 +1,0 @@
-overlay | 1 | Show the annotation layer while sharing
-guest-mode | annotation | What you do on a screen you're viewing
-start-calls-muted | 0 | Start calls muted
