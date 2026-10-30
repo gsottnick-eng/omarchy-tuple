@@ -213,6 +213,21 @@ function parseLoginUrl(raw) {
   return m ? m[0] : ""
 }
 
+// `tuple auth` only takes the code as a command-line argument, which other
+// local accounts can read from /proc while it runs. The plugin sends the same
+// request straight to the daemon's socket instead: an 8-byte little-endian
+// payload length, an 8-byte argument count, then each argument NUL-terminated
+// (captured from the CLI). Quickshell's Socket.write sends text, so every byte
+// must stay ASCII: the code must be 1-100 printable ASCII characters, which
+// keeps the payload under 128 bytes. Anything else returns "".
+function authFrame(code) {
+  var c = text(code).trim()
+  if (!/^[\x21-\x7e]{1,100}$/.test(c)) return ""
+  var payload = "auth\u0000" + c + "\u0000"
+  var zeros = "\u0000\u0000\u0000\u0000\u0000\u0000\u0000"
+  return String.fromCharCode(payload.length) + zeros + String.fromCharCode(2) + zeros + payload
+}
+
 // Only the obviously-wrong is rejected here; the client decides the rest.
 function isJoinableUrl(value) {
   return /^https:\/\/\S+$/.test(text(value).trim())

@@ -26,6 +26,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 HARNESS = HERE / "harness" / "main.py"
 FAKE_CLIENT_DIR = HERE / "fake-tuple"
+sys.path.insert(0, str(FAKE_CLIENT_DIR))
+import fake_daemon  # noqa: E402
 OMARCHY = Path(os.environ.get("OMARCHY_SHELL", "/usr/share/omarchy/shell"))
 
 # Noise from the stand-in Quickshell types; nothing the plugin controls.
@@ -60,12 +62,17 @@ class Harness:
             (self.state / flag).touch()
 
         path = path_without_tuple()
+        # A short, private runtime dir: Unix socket paths are limited to ~108 bytes.
+        self.runtime = Path(tempfile.mkdtemp(prefix="tr", dir="/tmp"))
+        os.chmod(self.runtime, 0o700)
+        self.daemon = fake_daemon.serve(self.runtime / "tuple-0", self.state)
         self.env = dict(
             os.environ,
             QT_QPA_PLATFORM="offscreen",
             HARNESS_SCREEN="1600x1000",
             FAKE_TUPLE_STATE=str(self.state),
             XDG_BIN_HOME="",
+            XDG_RUNTIME_DIR=str(self.runtime),
             HYPRLAND_INSTANCE_SIGNATURE="fake00000000_1700000000_1",
             PATH=f"{FAKE_CLIENT_DIR}:{path}" if installed else path,
         )
@@ -117,10 +124,16 @@ class Harness:
         log = self.state / "argv"
         return log.read_text().splitlines() if log.exists() else []
 
+    def socket_requests(self):
+        log = self.state / "socket"
+        return log.read_text().splitlines() if log.exists() else []
+
     def cleanup(self):
         # The fake's follow loops end when they see `stopped`, so nothing outlives the test.
         (self.state / "stopped").touch()
+        self.daemon.close()
         shutil.rmtree(self.workdir, ignore_errors=True)
+        shutil.rmtree(self.runtime, ignore_errors=True)
 
 
 class PanelTest(unittest.TestCase):
@@ -156,16 +169,18 @@ class PanelTest(unittest.TestCase):
             sorted(harness.argv()), ["--help", "state follow --format json"]
         )
 
-    def test_sign_in_takes_the_code_as_one_argument_and_never_echoes_it(self):
+    def test_sign_in_sends_the_code_over_the_socket_never_on_a_command_line(self):
         harness = self.harness()
         harness.run(["sign-in", "code:wrong-code", "code:good-code", "wait:1500"])
         self.assertTrue(harness.after(0)["loginUrl"].startswith("https://"))
         rejected = harness.after(1)
         self.assertIn("invalid authorization code", rejected["error"])
-        self.assertNotIn("wrong-code", rejected["error"])
+        self.assertNotIn("wrong-code", rejected["error"], "the code is never echoed back")
         self.assertTrue(harness.final["loggedIn"])
         self.assertEqual(harness.final["loginUrl"], "")
-        self.assertIn("auth good-code", harness.argv())
+        self.assertEqual(harness.socket_requests(), ["auth wrong-code", "auth good-code"])
+        self.assertFalse(any("code" in line for line in harness.argv()),
+                         "no command the plugin ran carried the code: " + repr(harness.argv()))
         self.assertGreater(len(harness.final["panel"]["rooms"]), 0)
 
     def test_a_blank_code_is_refused_without_running_anything(self):
@@ -173,6 +188,7 @@ class PanelTest(unittest.TestCase):
         state = harness.run(["sign-in", "code:   "])
         self.assertNotEqual(state["error"], "")
         self.assertFalse(any(line.startswith("auth") for line in harness.argv()))
+        self.assertEqual(harness.socket_requests(), [], "nothing was sent to the daemon")
 
     def test_signed_in_lists_everyone_and_a_search_narrows_rooms_and_people(self):
         harness = self.harness(logged_in=True)

@@ -101,10 +101,6 @@ case "$*" in
   "contacts follow --format json") need_login; if flag many; then many_contacts; else compact "$FIXTURES/contacts.json"; fi; while [ -d "$STATE" ] && ! flag stopped; do sleep 0.2; done ;;
   "rooms follow --format json") need_login; clear_flag stopped; follow rooms_snapshot ;;
   "login") cat "$FIXTURES/login.txt"; set_flag login_pending ;;
-  "auth "*)
-    flag login_pending || { echo "error: no auth session, run 'tuple login' first" >&2; exit 1; }
-    [ "$2" = "good-code" ] || fail "invalid authorization code $2"
-    clear_flag login_pending; set_flag logged_in ;;
   "logout") clear_flag logged_in; clear_flag in_call ;;
   "call start "*|"call join "*|"rooms join "*|"call accept") need_login; set_flag in_call; echo '{"id":"00000000-0000-4000-8000-000000001001"}' ;;
   "call leave") need_call; clear_flag in_call; clear_flag muted; clear_flag sharing; echo "Left call" ;;

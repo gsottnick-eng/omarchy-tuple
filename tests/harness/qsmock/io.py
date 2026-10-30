@@ -3,6 +3,7 @@
 import os
 
 from PySide6.QtCore import Property, QObject, QProcess, Signal, Slot
+from PySide6.QtNetwork import QLocalSocket
 from PySide6.QtQml import QmlElement
 
 QML_IMPORT_NAME = "Quickshell.Io"
@@ -287,3 +288,71 @@ class IpcHandler(QObject):
         self._enabled = value
 
     enabled = Property(bool, _get_enabled, _set_enabled)
+
+
+@QmlElement
+class Socket(QObject):
+    """Quickshell's Socket: a local (Unix) socket that writes text and feeds a
+    parser. Setting `connected` connects or disconnects."""
+
+    connectedChanged = Signal()
+    pathChanged = Signal()
+    error = Signal(int)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._path = ""
+        self._parser = None
+        self._socket = QLocalSocket(self)
+        self._socket.connected.connect(self.connectedChanged.emit)
+        self._socket.disconnected.connect(self._on_disconnected)
+        self._socket.readyRead.connect(self._on_ready_read)
+        self._socket.errorOccurred.connect(lambda e: self.error.emit(int(e.value) if hasattr(e, "value") else int(e)))
+
+    def _get_path(self):
+        return self._path
+
+    def _set_path(self, value):
+        if value != self._path:
+            self._path = value
+            self.pathChanged.emit()
+
+    path = Property(str, _get_path, _set_path, notify=pathChanged)
+
+    def _get_parser(self):
+        return self._parser
+
+    def _set_parser(self, value):
+        self._parser = value
+
+    parser = Property(QObject, _get_parser, _set_parser)
+
+    def _get_connected(self):
+        return self._socket.state() == QLocalSocket.LocalSocketState.ConnectedState
+
+    def _set_connected(self, value):
+        if value:
+            self._socket.connectToServer(self._path)
+        else:
+            self._socket.disconnectFromServer()
+
+    connected = Property(bool, _get_connected, _set_connected, notify=connectedChanged)
+
+    def _on_ready_read(self):
+        data = bytes(self._socket.readAll().data()).decode("utf-8", "replace")
+        if self._parser is not None:
+            self._parser.feed(data)
+
+    def _on_disconnected(self):
+        self._on_ready_read()
+        if self._parser is not None:
+            self._parser.finish()
+        self.connectedChanged.emit()
+
+    @Slot(str)
+    def write(self, data):
+        self._socket.write(data.encode("utf-8"))
+
+    @Slot()
+    def flush(self):
+        self._socket.flush()

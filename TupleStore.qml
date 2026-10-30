@@ -303,7 +303,7 @@ Singleton {
 
   // `tuple login` opens the browser itself and prints the same link, which is
   // kept only so it can be opened again. The code the user pastes back goes
-  // to `tuple auth` as one argument and is not kept or shown anywhere.
+  // to the daemon over its socket (submitCode) and is not kept or shown anywhere.
   function signIn() {
     if (!installed || loginProcess.running) return
     loggingIn = true
@@ -314,15 +314,45 @@ Singleton {
     loginProcess.running = true
   }
 
+  // The code goes straight to the daemon over its socket in the user's private
+  // runtime directory, never as a command-line argument: `tuple auth CODE`
+  // would expose it to other local accounts through /proc (Model.authFrame).
   function submitCode(code) {
     var value = String(code || "").trim()
-    if (value === "" || /\s/.test(value)) {
+    var frame = Model.authFrame(value)
+    if (frame === "") {
       fail("Paste the authorization code from the sign-in page.")
       return false
     }
+    var runtime = Quickshell.env("XDG_RUNTIME_DIR")
+    if (!runtime || authSocket.connected) {
+      fail("Couldn't reach Tuple to finish signing in. Click Sign in again.")
+      return false
+    }
     _authCode = value
-    run(["auth", value], "Finishing sign in…")
+    _authFrame = frame
+    _authReply = ""
+    progress("Finishing sign in…")
+    authSocket.path = runtime + "/tuple-0"
+    authSocket.connected = true
     return true
+  }
+
+  function _finishAuth(failedToConnect) {
+    var code = _authCode
+    var reply = _authReply.trim()
+    _authCode = ""
+    _authFrame = ""
+    _authReply = ""
+    if (failedToConnect) {
+      fail("Couldn't reach Tuple to finish signing in. Click Sign in again.")
+    } else if (/^error|invalid|failed/i.test(reply)) {
+      // Never echo a pasted code back, even if the client quotes it.
+      fail(Model.errorMessage(code !== "" ? reply.split(code).join("…") : reply))
+    } else if (status.slice(-1) === "…") {
+      // Success shows up on the state stream as signed in.
+      status = ""
+    }
   }
 
   function openLoginUrl() {
@@ -378,6 +408,8 @@ Singleton {
 
   property string _loginText: ""
   property string _authCode: ""
+  property string _authFrame: ""
+  property string _authReply: ""
   property bool _updating: false
 
   // True from Share until the client reports sharing or 60 s pass: the daemon
@@ -536,6 +568,24 @@ Singleton {
     onExited: if (root.inCall) root._streamEnded()
   }
 
+  // One request per connection: the daemon answers with a line of text and
+  // closes the socket.
+  Socket {
+    id: authSocket
+    parser: SplitParser { onRead: function(line) { root._authReply += line + "\n" } }
+    onConnectedChanged: {
+      if (connected) {
+        write(root._authFrame)
+        flush()
+      } else if (root._authCode !== "") {
+        root._finishAuth(false)
+      }
+    }
+    // The daemon closing the socket after its reply is reported as an error
+    // too, so an error only means failure if nothing was answered.
+    onError: if (root._authCode !== "") root._finishAuth(root._authReply === "")
+  }
+
   Process {
     id: actionProcess
     stdout: StdioCollector { id: actionOut; waitForEnd: true }
@@ -552,15 +602,10 @@ Singleton {
         root._share()
         return
       }
-      var code = root._authCode
-      root._authCode = ""
       if (exitCode !== 0) {
         root.pickerPending = false
         pickerTimer.stop()
-        var message = Model.errorMessage(String(actionErr.text || "") || String(actionOut.text || ""))
-        // Never echo a pasted code back, even if the client quotes it.
-        if (code !== "") message = message.split(code).join("…")
-        root.fail(message)
+        root.fail(Model.errorMessage(String(actionErr.text || "") || String(actionOut.text || "")))
       } else if (root.status.slice(-1) === "…") {
         // The state stream shows what changed; the in-flight label is done.
         root.status = ""
