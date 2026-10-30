@@ -118,7 +118,8 @@ which shadows Omarchy's in this harness. Quickshell itself is not affected.
 
 - Keep diffs small and focused on one problem. Add a test that fails without the
   change.
-- Run both test suites; both must pass.
+- Run both test suites; both must pass. GitHub Actions (`.github/workflows/tests.yml`)
+  runs them on every PR, and `main` only accepts PRs whose Node and Panel checks pass.
 - Do not change the plugin id in `manifest.json` once the plugin is listed in the
   marketplace, where ids are permanent. It changed once before listing, from
   `io.github.gsottnick-eng.tuple`, when the GitHub account was renamed.
