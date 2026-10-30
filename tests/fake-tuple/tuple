@@ -47,10 +47,11 @@ share_event() {
   printf '{"type":"current_call","data":{"local":{"share_state":"%s"}}}\n' "$share"
 }
 
-# Print a snapshot whenever it changes, until killed or the daemon is stopped.
+# Print a snapshot whenever it changes, until killed, the daemon is stopped,
+# or the test deletes the state directory (and with it the `stopped` flag).
 follow() {
   last=""
-  while ! flag stopped; do
+  while [ -d "$STATE" ] && ! flag stopped; do
     now="$($1)"
     [ "$now" = "$last" ] || { printf '%s\n' "$now"; last="$now"; }
     sleep 0.1
@@ -98,7 +99,7 @@ case "$*" in
   "stop") set_flag stopped; echo "exiting" ;;
   "state follow --format json") clear_flag stopped; follow state_snapshot ;;
   "state follow --raw --format json") follow share_event ;;
-  "contacts follow --format json") need_login; if flag many; then many_contacts; else compact "$FIXTURES/contacts.json"; fi; while ! flag stopped; do sleep 0.2; done ;;
+  "contacts follow --format json") need_login; if flag many; then many_contacts; else compact "$FIXTURES/contacts.json"; fi; while [ -d "$STATE" ] && ! flag stopped; do sleep 0.2; done ;;
   "rooms follow --format json") need_login; clear_flag stopped; follow rooms_snapshot ;;
   "login") cat "$FIXTURES/login.txt"; set_flag login_pending ;;
   "auth "*)

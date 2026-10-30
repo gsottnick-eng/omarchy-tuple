@@ -1,0 +1,29 @@
+// Every `TupleStore.<name>` the panel uses must exist on the store. QML only
+// reports a missing one at run time, as a TypeError when it's used: a Share
+// button calling an undefined TupleStore.shareFromPanel() once shipped silent.
+
+import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import test from "node:test"
+import { fileURLToPath } from "node:url"
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..")
+const store = readFileSync(join(root, "TupleStore.qml"), "utf8")
+const panel = readFileSync(join(root, "Panel.qml"), "utf8")
+
+const declared = new Set([
+  ...[...store.matchAll(/^\s*function\s+(\w+)\s*\(/gm)].map((m) => m[1]),
+  ...[...store.matchAll(/^\s*(?:readonly\s+)?property\s+\w+\s+(\w+)/gm)].map((m) => m[1]),
+  ...[...store.matchAll(/^\s*signal\s+(\w+)/gm)].map((m) => m[1]),
+])
+
+test("the store declares what the panel needs at all", () => {
+  assert.ok(declared.has("toggleShare") && declared.has("inCall"), "store parsing found the basics")
+})
+
+test("every TupleStore member the panel uses exists on the store", () => {
+  const used = new Set([...panel.matchAll(/\bTupleStore\.(\w+)/g)].map((m) => m[1]))
+  const missing = [...used].filter((name) => !declared.has(name)).sort()
+  assert.deepEqual(missing, [], `Panel.qml uses TupleStore members that don't exist: ${missing.join(", ")}`)
+})
