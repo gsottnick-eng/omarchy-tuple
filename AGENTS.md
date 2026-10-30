@@ -18,6 +18,7 @@ Diagnosing a user's problem? Start with `agents/diagnose/SKILL.md`.
 | `Model.js` | Pure parsing of the client's JSON; no QML imports |
 | `TupleIcon.qml` | The bar glyph |
 | `bin/tuple-install` | Downloads Tuple, verifies its SHA-256, installs it |
+| `bin/tuple-notify` | Shows call alerts, read from stdin, over D-Bus |
 | `agents/diagnose/SKILL.md` | How a user's agent diagnoses and reports problems |
 
 ## Rules every change keeps
@@ -33,6 +34,11 @@ Diagnosing a user's problem? Start with `agents/diagnose/SKILL.md`.
    shown, even in an error, and **never put on a command line**: other local
    accounts can read any process's arguments in `/proc`. It goes straight to the
    daemon's socket instead (see "The Tuple client"). Never call `tuple auth`.
+   Other private text stays off command lines too: call alerts name the people
+   in a call and a copied link may be a sign-in or room link, so they reach
+   `bin/tuple-notify` and `wl-copy` on stdin. The `tuple` commands themselves
+   (`call start <email>`, `rooms join <slug>`) still take arguments; the client
+   offers no other way.
 3. **Commands are argument lists, never shell strings.** The single `sh -c`
    (finding the binary) takes no user input.
 4. **No polling.** The client pushes complete snapshots on `tuple state follow`,
@@ -44,8 +50,8 @@ Diagnosing a user's problem? Start with `agents/diagnose/SKILL.md`.
    included. Stop closes the streams before stopping the daemon, and nothing
    restarts them until Start.
 7. **No dependencies beyond a stock Omarchy:** the `tuple` binary at run time,
-   `curl` and `sha256sum` to install, `wl-copy` to copy a link, `notify-send` for
-   call alerts.
+   `curl` and `sha256sum` to install, `wl-copy` to copy a link, and the system
+   Python with python-gobject (in Omarchy's base packages) for call alerts.
 8. **User-controlled text renders as plain text.** Contact and room names are
    chosen by other people; every `Text` showing them sets
    `textFormat: Text.PlainText`.

@@ -122,6 +122,7 @@ def snapshot(plugin: QObject, store: QObject) -> dict:
     bar = plugin.property("bar")
     state["barWrites"] = read(bar, "writes", []) if bar is not None else []
     state["detached"] = core.DETACHED
+    state["piped"] = io.PIPED
     return state
 
 
@@ -185,6 +186,8 @@ def apply_step(step: str, plugin: QObject, store: QObject, harness=None):
         invoke(store, "joinRoom", entry("rooms"))
     elif name == "join-url":
         invoke(store, "joinUrl", argument)
+    elif name == "copy":
+        invoke(store, "copy", argument)
     elif name == "search":
         plugin.setProperty("search", argument)
     elif name == "flag":

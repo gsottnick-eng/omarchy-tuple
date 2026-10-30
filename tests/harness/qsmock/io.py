@@ -85,12 +85,19 @@ class SplitParser(QObject):
             self.read.emit(tail)
 
 
+# Commands that read their input on stdin, recorded with that input instead of
+# run; tests assert on these.
+PIPED_COMMANDS = {"wl-copy", "tuple-notify"}
+PIPED = []
+
+
 @QmlElement
 class Process(QObject):
     commandChanged = Signal()
     runningChanged = Signal()
     exited = Signal(int, int)
     started = Signal()
+    stdinEnabledChanged = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -100,6 +107,8 @@ class Process(QObject):
         self._stderr = None
         self._working_directory = ""
         self._proc = None
+        self._stdin_enabled = False
+        self._piped = None
 
     def _get_command(self):
         return self._command
@@ -145,11 +154,45 @@ class Process(QObject):
 
     running = Property(bool, _get_running, _set_running, notify=runningChanged)
 
+    def _get_stdin_enabled(self):
+        return self._stdin_enabled
+
+    def _set_stdin_enabled(self, value):
+        value = bool(value)
+        if value == self._stdin_enabled:
+            return
+        self._stdin_enabled = value
+        self.stdinEnabledChanged.emit()
+        if not value and self._running:
+            if self._piped is not None:
+                # Closing stdin is the end of a piped command's input.
+                self._finalize(0, 0)
+            elif self._proc is not None:
+                self._proc.closeWriteChannel()
+
+    stdinEnabled = Property(bool, _get_stdin_enabled, _set_stdin_enabled, notify=stdinEnabledChanged)
+
+    @Slot(str)
+    def write(self, data):
+        if not self._running or not self._stdin_enabled:
+            return
+        if self._piped is not None:
+            self._piped["stdin"] += data
+        elif self._proc is not None:
+            self._proc.write(data.encode("utf-8"))
+
     def _start(self):
         if not self._command:
             return
         self._running = True
         self.runningChanged.emit()
+        if os.path.basename(self._command[0]) in PIPED_COMMANDS:
+            # Recorded, never run: tests must not raise real notifications or
+            # write the developer's clipboard.
+            self._piped = {"command": list(self._command), "stdin": ""}
+            PIPED.append(self._piped)
+            self.started.emit()
+            return
         # Each run starts from an empty buffer, as the real collector does.
         for stream in (self._stdout, self._stderr):
             if stream is not None:
@@ -204,9 +247,10 @@ class Process(QObject):
         for stream in (self._stdout, self._stderr):
             if stream is not None:
                 stream.finish()
+        self._proc = None
+        self._piped = None
         self.runningChanged.emit()
         self.exited.emit(exit_code, exit_status)
-        self._proc = None
 
 
 @QmlElement
