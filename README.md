@@ -133,7 +133,8 @@ omarchy plugin remove io.github.gsottnick.tuple
 ```
 
 That removes the widget and its settings. The Tuple client stays, since you
-may still want it in a terminal. To remove it too:
+may still want it in a terminal, and its background daemon keeps running until
+you log out; `tuple stop` stops it now. To remove the client too:
 
 ```bash
 tuple stop
