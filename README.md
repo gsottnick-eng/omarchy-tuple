@@ -177,11 +177,16 @@ You can also [open an issue](https://github.com/gsottnick/omarchy-tuple/issues).
 
 ## Development
 
+Contributions are welcome: open a pull request. Both test suites run
+automatically on every PR and must pass before it can merge;
+[`CONTRIBUTING.md`](CONTRIBUTING.md) says exactly what they check and how to
+run them yourself.
+
 [`AGENTS.md`](AGENTS.md) has the layout, the rules every change keeps, and how
 to run the tests. It is written for coding agents and works for people too.
 
 ```bash
-node --test tests/
+node --test 'tests/*.test.mjs'
 ```
 
 ## License
