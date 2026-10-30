@@ -155,10 +155,10 @@ list, who has to fix each one, and what we're waiting on. The big ones:
   apps hang until you log out and back in. Tuplet warns you before each share
   (you can turn that off), and refuses to share again after a crash until you
   log back in. Seen with Tuple v2026_10_23.0 and Xwayland 24.1.14.
-- **Viewing someone else's screen needs Xwayland.** Tuple's viewer window is an
-  X11 app. Viewing works, and doesn't crash anything, but after a share of
-  yours has crashed Xwayland, you can't view anyone's screen until you log out
-  and back in.
+- **After you share your own screen, you can't watch anyone else's until you
+  log out and back in.** Tuple's viewer window is an X11 app, and sharing has
+  crashed Xwayland. Viewing works fine before you share. Logging out closes
+  your open apps, so share when that's acceptable.
 - **Screen sharing needs the client's `capture` setting on `auto`**, Tuple's
   default. The `x11` setting fails under Hyprland with
   `X11GetImage failed with UnexpectedX11Event`. If you changed it, set it back:
