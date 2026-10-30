@@ -29,6 +29,8 @@ Singleton {
   property bool installed: false
   property string binaryPath: ""
   property bool canShare: false
+  property bool canSettings: false
+  property var settings: ({})
 
   // ---------------------------------------------------------------- state
   property bool daemonRunning: false
@@ -139,6 +141,14 @@ Singleton {
     var s = Model.parseState(line)
     if (!s) return
     var wasInCall = inCall
+    // Lines that arrive within a second of Share are echoes of the start;
+    // only a later snapshot means the daemon answers again, i.e. the picker
+    // closed — picked or cancelled.
+    if (pickerPending && new Date().getTime() - pickerIssuedAt > 1000) {
+      pickerPending = false
+      pickerTimer.stop()
+      if (status.slice(-1) === ".") status = ""
+    }
     restartTimer.interval = 1000
     daemonRunning = true
     user = s.user
@@ -158,6 +168,7 @@ Singleton {
       announcedParticipants = s.participants.filter(function(p) { return p.connected })
       pendingParticipants = null
       participantDebounce.stop()
+      _fetchSettings()
     } else if (wasInCall && s.inCall) {
       pendingParticipants = s.participants.filter(function(p) { return p.connected })
       participantDebounce.restart()
@@ -165,6 +176,8 @@ Singleton {
       announcedParticipants = []
       pendingParticipants = null
       participantDebounce.stop()
+      pickerPending = false
+      pickerTimer.stop()
     }
     if (loggedIn && loggingIn) {
       loggingIn = false
@@ -180,8 +193,11 @@ Singleton {
 
   // ---------------------------------------------------------------- actions
 
-  function run(args, label) {
+  function run(args, label, urgent) {
     if (!installed) return
+    // The daemon is blocked on the portal picker; piling up commands made
+    // things worse in testing. Leaving is always allowed.
+    if (pickerPending && !urgent) { note("Tuple is waiting for the share picker…"); return }
     if (actionProcess.running) {
       note("Still finishing the last command…")
       return
@@ -208,12 +224,52 @@ Singleton {
   }
 
   function toggleShare() {
-    if (inCall && canShare) run([sharing ? "unshare" : "share"], sharing ? "Stopping share…" : "Pick a screen to share…")
+    if (!inCall || !canShare) return
+    if (sharing) { run(["unshare"], "Stopping share…"); return }
+    if (pickerPending) return
+    // Only check when sharing starts: Xwayland dead earlier in this session
+    // never recovers, and the share picker would hang forever.
+    var epoch = Model.hyprlandEpoch(Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE"))
+    if (epoch === "") { _share(); return }
+    // One-shot check on the shared action queue — not a tuple command, so
+    // the command is set directly, without the binary in front. A missing or
+    // failing coredumpctl exits nonzero and must never block sharing.
+    if (actionProcess.running) return
+    _checkingXwayland = true
+    progress("")
+    actionProcess.command = ["coredumpctl", "list", "--no-legend", "--no-pager", "--since", "@" + epoch, "COREDUMP_COMM=Xwayland"]
+    actionProcess.running = true
+  }
+
+  function _share() {
+    if (pickerPending) return
+    run(["share"], "Choose a screen to share in the picker. Tuple pauses until you do.")
+    // The daemon's main thread blocks while the portal picker is open, so no
+    // other command can run; hold this status until the daemon answers again
+    // (the picker closed, picked or cancelled), sharing starts, or 60 s.
+    pickerIssuedAt = new Date().getTime()
+    pickerPending = true
+    pickerTimer.restart()
+  }
+
+  // Read once when a call starts, so the toggles show what the client has.
+  function _fetchSettings() {
+    if (!canSettings || settingsProcess.running) return
+    settingsProcess.command = command(["settings"])
+    settingsProcess.running = true
+  }
+
+  function setSetting(name, value) {
+    if (!canSettings) return
+    var updated = settings
+    updated[name] = value
+    settings = updated
+    run(["set", name, value], "Saving setting…")
   }
 
   function leave() {
     if (callProcess.running) callProcess.running = false
-    if (inCall || calling !== "") run(["call", "leave"], "Leaving the call…")
+    if (inCall || calling !== "") run(["call", "leave"], "Leaving the call…", true)
     calling = ""
   }
 
@@ -342,6 +398,20 @@ Singleton {
   property string _authCode: ""
   property bool _updating: false
 
+  // True from Share until the client reports sharing or 60 s pass: the daemon
+  // is blocked on the portal picker meanwhile.
+  property bool pickerPending: false
+  property real pickerIssuedAt: 0
+  property bool _checkingXwayland: false
+  Timer {
+    id: pickerTimer
+    interval: 60000
+    onTriggered: {
+      root.pickerPending = false
+      if (root.status.slice(-1) === ".") root.status = ""
+    }
+  }
+
   // Who we last announced as in the call, and who is waiting to be announced.
   // A change is reported only after it has held for three seconds, so a
   // network blip that flips `connected` away and back says nothing.
@@ -382,6 +452,13 @@ Singleton {
       Quickshell.execDetached(["notify-send", "-a", "Tuple", "-i", "call-start",
         inCall ? "Call started" : "Call ended", inCall ? summary : ""])
     }
+  }
+
+  // Sharing started: the picker is resolved, other commands can run again.
+  onSharingChanged: if (sharing && pickerPending) {
+    pickerPending = false
+    pickerTimer.stop()
+    status = ""
   }
 
   onLoggedInChanged: if (loggedIn) startStreams()
@@ -430,7 +507,10 @@ Singleton {
   Process {
     id: helpProcess
     stdout: StdioCollector { id: helpOut; waitForEnd: true }
-    onExited: root.canShare = Model.supportsShare(helpOut.text)
+    onExited: {
+      root.canShare = Model.supportsShare(helpOut.text)
+      root.canSettings = Model.supportsSettings(helpOut.text)
+    }
   }
 
   Process {
@@ -476,13 +556,34 @@ Singleton {
   }
 
   Process {
+    id: settingsProcess
+    stdout: StdioCollector { id: settingsOut; waitForEnd: true }
+    onExited: function(exitCode) {
+      if (exitCode === 0) root.settings = Model.parseSettings(String(settingsOut.text || ""))
+    }
+  }
+
+  Process {
     id: actionProcess
     stdout: StdioCollector { id: actionOut; waitForEnd: true }
     stderr: StdioCollector { id: actionErr; waitForEnd: true }
     onExited: function(exitCode) {
+      if (root._checkingXwayland) {
+        root._checkingXwayland = false
+        // Exit 0 with output lines naming Xwayland means it crashed this
+        // session; anything else (missing coredumpctl, no dumps) never blocks.
+        if (exitCode === 0 && Model.xwaylandDead(String(actionOut.text || ""))) {
+          root.fail("Xwayland stopped earlier in this session, so screen sharing would hang. Log out and back in, then share again.")
+          return
+        }
+        root._share()
+        return
+      }
       var code = root._authCode
       root._authCode = ""
       if (exitCode !== 0) {
+        root.pickerPending = false
+        pickerTimer.stop()
         var message = Model.errorMessage(String(actionErr.text || "") || String(actionOut.text || ""))
         // Never echo a pasted code back, even if the client quotes it.
         if (code !== "") message = message.split(code).join("…")

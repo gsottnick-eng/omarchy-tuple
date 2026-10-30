@@ -68,6 +68,13 @@ this plugin is built on. Behaviour that is not obvious from `tuple --help`:
   right now, not the room's membership; it is `[]` when the room is empty.
 - `active_call` is not occupancy. It can be `false` on an occupied room, and
   its real meaning is unknown, so the plugin never relies on it.
+- **`tuple share` blocks the daemon**: after "screen share initiated", the
+  daemon's main thread waits on the desktop portal picker, and every other
+  `tuple` command (and the follow streams) stalls until a screen is picked or
+  the picker closes.
+- **A dead Xwayland hangs the daemon too**: after Xwayland crashes, it keeps
+  listening on `/tmp/.X11-unix/X0` but never accepts again, so `tuple share`
+  blocks forever; only a re-login recovers. Hyprland never restarts Xwayland.
 
 ## Testing
 
@@ -121,5 +128,6 @@ which shadows Omarchy's in this harness. Quickshell itself is not affected.
   client. Work through their checklist in a PR.
 - Machine-authored pull requests and issues end with
   `Filed by <model name> via <agent harness>.`
-- Bugs in Tuple's client, Hyprland, or Omarchy itself belong upstream. The
-  "Known issues" section of `README.md` lists the ones already traced.
+- Bugs in Tuple's client, Hyprland, or Omarchy itself belong upstream.
+  [`UPSTREAM.md`](UPSTREAM.md) tracks each one, who must fix it, and the drafts
+  waiting to be sent.
