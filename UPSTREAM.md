@@ -6,7 +6,7 @@ each upstream follow the table. File links land here once reports are filed.
 | Problem | What the user sees | Who must fix it | Status | Tuplet's workaround |
 | --- | --- | --- | --- | --- |
 | Xwayland segfaults (null deref) when remote control starts on a shared screen | Every X11 app closes at once; the session and Wayland apps survive | X.org/Xwayland (freedesktop GitLab), and Tuple's Linux client for what it sends | draft below | none — Native Wayland apps are unaffected |
-| Hyprland never restarts Xwayland after it dies | After any Xwayland crash, every X11 app hangs on connect until you log out and back in; `hyprctl` toggling `xwayland.enabled` does not recover it | hyprwm/Hyprland | [posted](https://github.com/hyprwm/Hyprland/discussions/16722) | Tuplet refuses to share when a core dump says Xwayland died this session, and says why |
+| Hyprland never restarts Xwayland after it dies | After any Xwayland crash, every X11 app hangs on connect until you log out and back in; `hyprctl` toggling `xwayland.enabled` does not recover it | hyprwm/Hyprland | not reported: Hyprland only accepts reports written by a person (see below) | Tuplet refuses to share when a core dump says Xwayland died this session, and says why |
 | Tuple daemon blocks completely while the portal screen picker is open | Every `tuple` command and follow stream stalls until a screen is picked or the picker closes | Tuple | draft below | Tuplet closes the panel before sharing, explains the wait, and refuses other commands while the picker is up |
 | Tuple daemon hangs connecting to a dead Xwayland and never recovers | After an Xwayland crash the daemon must be killed; it never recovers on its own | Tuple | draft below | none |
 | The overlay's sharing border can't be thinner or rounded | A thick square border around the shared screen; no setting changes it | Tuple | draft below | none |
@@ -76,11 +76,14 @@ hyprland-preview-share-picker 0.2.1, NVIDIA RTX 5080, two monitors, Arch Linux.
 11. **`rooms` records no "favorited at" time**, so a client can't offer
     most-recently-favorited sorting.
 
-## Posted: hyprwm/Hyprland
+## Not reported: hyprwm/Hyprland
 
-[Posted to Discussions → Bugs - Other](https://github.com/hyprwm/Hyprland/discussions/16722)
-(2026-10-29); the text below mirrors it — keep this copy in sync if the
-discussion grows.
+Hyprland's bug templates forbid AI-written reports ("Please do **not** use AI to
+report bugs"). An agent-written discussion posted on 2026-10-29 (#16722) was closed
+by their moderation bot and earned the poster's account a strike. **Agents must
+never post to hyprwm/Hyprland.** A person who wants this reported should write it
+in their own words through the Bugs → Other discussion form; the facts below are
+for reference only, not to be pasted.
 
 Title: **Xwayland is not restarted after it crashes; every later X11 client
 hangs on connect until re-login**
