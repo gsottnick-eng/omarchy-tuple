@@ -211,7 +211,7 @@ Panel {
       onTextKey: function(t) {
         var key = String(t).toLowerCase()
         if (key === "m") TupleStore.toggleMute()
-        else if (key === "s") TupleStore.shareFromPanel()
+        else if (key === "s") root.shareFromPanel()
         else if (key === "l") TupleStore.leave()
         else if (key === "a" && root.ringing) TupleStore.accept()
         else if (key === "/" && root.ready) searchField.forceActiveFocus()
@@ -471,7 +471,7 @@ Panel {
                   tooltipText: TupleStore.sharing ? "Stop sharing (s)" : "Share your screen (s)"
                   foreground: TupleStore.sharing ? root.accent : root.foreground
                   fontFamily: root.fontFamily
-                  onClicked: TupleStore.shareFromPanel()
+                  onClicked: root.shareFromPanel()
                 }
 
                 PanelActionButton {
