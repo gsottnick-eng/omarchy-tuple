@@ -91,7 +91,10 @@ Then update any keybindings that call `omarchy-shell` with the old id.
 
 Open the dropdown. If Tuple isn't installed, it offers to install it. Then
 **Sign in**: your browser opens Tuple's sign-in page, and you paste the
-authorization code it gives you back into the panel.
+authorization code it gives you back into the panel. Omatuple hands the code
+straight to Tuple's background service over a private socket. It never stores
+the code, and never puts it on a command line where other accounts on the
+machine could read it.
 
 ### How the client gets installed
 

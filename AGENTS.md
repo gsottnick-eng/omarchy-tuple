@@ -29,8 +29,10 @@ Diagnosing a user's problem? Start with `agents/diagnose/SKILL.md`.
    the client at run time. The only fixed addresses are Tuple's release endpoint
    and download hosts in `bin/tuple-install`, which form a security allowlist.
 2. **The plugin stores nothing about the account.** No saved rooms, no personal
-   link, no sign-in code. The authorization code goes to `tuple auth` as a
-   single argument and is never kept, logged, or shown, even in an error.
+   link, no sign-in code. The authorization code is never kept, logged, or
+   shown, even in an error, and **never put on a command line**: other local
+   accounts can read any process's arguments in `/proc`. It goes straight to the
+   daemon's socket instead (see "The Tuple client"). Never call `tuple auth`.
 3. **Commands are argument lists, never shell strings.** The single `sh -c`
    (finding the binary) takes no user input.
 4. **No polling.** The client pushes complete snapshots on `tuple state follow`,
@@ -57,6 +59,13 @@ this plugin is built on. Behaviour that is not obvious from `tuple --help`:
   `{"error": "..."}`. The older verbs (`login`, `auth`, `logout`, `start`,
   `stop`, `share`, `unshare`) print plain text and reject `--help`.
 - A signed-out `state` reports `user.id` as `0`, not a null user.
+- `tuple auth` takes the code only as an argument. The CLI just forwards it to
+  the daemon over `$XDG_RUNTIME_DIR/tuple-0` (private, mode 0700): an 8-byte
+  little-endian payload length, an 8-byte argument count, then each argument
+  NUL-terminated (`auth\0<code>\0`). The daemon answers with one line of text
+  (e.g. `already logged in`, `error: …`) and closes the socket, which Quickshell
+  also reports as a `PeerClosedError`. The plugin sends this frame itself
+  (`Model.authFrame`, `TupleStore.submitCode`), so the code never reaches `/proc`.
 - `call start <person>` blocks until the other side answers (exit 0) or the call
   ends (exit 2), so it runs outside the shared command queue.
 - People are identified by email or full name. The numeric id does not resolve.

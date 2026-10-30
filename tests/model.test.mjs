@@ -151,6 +151,22 @@ test("JSON and legacy errors both become a plain sentence", () => {
   assert.equal(Model.errorMessage("error: no auth session, run 'tuple login' first"), "no auth session, run 'tuple login' first")
 })
 
+test("the auth request matches what the CLI sends to the daemon, byte for byte", () => {
+  // Captured from `tuple auth TESTCODE123` against a stand-in socket.
+  const captured = Buffer.from("1100000000000000" + "0200000000000000", "hex").toString("latin1") + "auth\0TESTCODE123\0"
+  assert.equal(Model.authFrame("TESTCODE123"), captured)
+  assert.equal(Model.authFrame("  TESTCODE123\n"), captured, "surrounding whitespace is trimmed")
+})
+
+test("an auth code that could break the frame is refused", () => {
+  assert.equal(Model.authFrame(""), "")
+  assert.equal(Model.authFrame("two words"), "")
+  assert.equal(Model.authFrame("caf\u00e9"), "", "non-ASCII")
+  assert.equal(Model.authFrame("x".repeat(101)), "", "too long for a one-byte length")
+  assert.ok(Model.authFrame("x".repeat(100)).length > 0)
+  assert.ok([...Model.authFrame("a-Z_0.9~+/=")].every((ch) => ch.charCodeAt(0) < 128), "every byte stays ASCII")
+})
+
 test("the sign-in URL is the https link in the login instructions", () => {
   assert.equal(Model.parseLoginUrl(fixture("login.txt")), "https://tuple.example/start?code_challenge=fake0000")
   assert.equal(Model.parseLoginUrl("http://insecure.example/start"), "")
