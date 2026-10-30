@@ -82,7 +82,9 @@ fi
 
 emit resolve "Checking the latest Tuple release"
 
-manifest="$(curl -fsSL -H "Accept: ${VERSION_ACCEPT}" "${VERSION_ENDPOINT}?arch=${arch}" 2>/dev/null)" \
+# HTTPS only, redirects included: the checksum comes from this answer, so a
+# downgrade to plain HTTP anywhere would let the network swap binary and checksum.
+manifest="$(curl -fsSL --proto '=https' --proto-redir '=https' -H "Accept: ${VERSION_ACCEPT}" "${VERSION_ENDPOINT}?arch=${arch}" 2>/dev/null)" \
   || fail "could not reach Tuple's release service"
 
 # The endpoint answers {"version":…,"sha256":…,"url":…}. Parse without jq so
@@ -98,6 +100,19 @@ url="$(field url)"
 [ -n "$version" ] || fail "release service did not report a version for ${arch}"
 [ -n "$checksum" ] || fail "release service did not report a checksum for ${version}"
 [ -n "$url" ] || url="${RELEASE_BASE}/${version}/${arch}/tuple"
+
+# Both end up in paths and in the panel's JSON events, so only the shapes Tuple
+# actually publishes get through.
+case "$version" in
+  *[!A-Za-z0-9._-]*) fail "release service reported an unexpected version" ;;
+esac
+case "$checksum" in
+  *[!0-9a-f]*) fail "release service reported an unexpected checksum" ;;
+esac
+[ "${#checksum}" -eq 64 ] || fail "release service reported an unexpected checksum"
+case "$url" in
+  *[!A-Za-z0-9._~:/?=\&%+-]*) fail "refusing to download from an unexpected host" ;;
+esac
 
 case "$url" in
   https://tuple-client-releases.s3.amazonaws.com/*|https://production.tuple.app/*) ;;
@@ -118,7 +133,7 @@ trap 'rm -rf "$work"' EXIT INT TERM
 payload="${work}/tuple"
 
 emit download "Downloading Tuple ${version} (${arch})" ",\"version\":\"${version}\""
-curl -fL --retry 2 --connect-timeout 20 "$url" -o "$payload" 2>/dev/null \
+curl -fL --proto '=https' --proto-redir '=https' --retry 2 --connect-timeout 20 "$url" -o "$payload" 2>/dev/null \
   || fail "download failed from ${url}"
 
 emit verify "Verifying checksum"
