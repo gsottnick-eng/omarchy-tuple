@@ -151,7 +151,9 @@ Panel {
     function status(): string { return TupleStore.summary }
     function mute(): string { TupleStore.toggleMute(); return "ok" }
     function share(): string { TupleStore.toggleShare(); return TupleStore.canShare ? "ok" : "unsupported" }
-
+    function leave(): string { TupleStore.leave(); return "ok" }
+    function accept(): string { TupleStore.accept(); return "ok" }
+    function join(url: string): string { return TupleStore.joinUrl(url) ? "ok" : "invalid url" }
     function diagnose(): string { TupleStore.diagnose(); return "ok" }
   }
 
