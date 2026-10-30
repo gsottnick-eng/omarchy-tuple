@@ -6,7 +6,7 @@ each upstream follow the table. File links land here once reports are filed.
 | Problem | What the user sees | Who must fix it | Status | Tuplet's workaround |
 | --- | --- | --- | --- | --- |
 | Xwayland segfaults (null deref) when remote control starts on a shared screen | Every X11 app closes at once; the session and Wayland apps survive | X.org/Xwayland (freedesktop GitLab), and Tuple's Linux client for what it sends | draft below | none — Native Wayland apps are unaffected |
-| Hyprland never restarts Xwayland after it dies | After any Xwayland crash, every X11 app hangs on connect until you log out and back in; `hyprctl` toggling `xwayland.enabled` does not recover it | hyprwm/Hyprland | filing to hyprwm/Hyprland (link lands here) | Tuplet refuses to share when a core dump says Xwayland died this session, and says why |
+| Hyprland never restarts Xwayland after it dies | After any Xwayland crash, every X11 app hangs on connect until you log out and back in; `hyprctl` toggling `xwayland.enabled` does not recover it | hyprwm/Hyprland | [posted](https://github.com/hyprwm/Hyprland/discussions/16722) | Tuplet refuses to share when a core dump says Xwayland died this session, and says why |
 | Tuple daemon blocks completely while the portal screen picker is open | Every `tuple` command and follow stream stalls until a screen is picked or the picker closes | Tuple | draft below | Tuplet closes the panel before sharing, explains the wait, and refuses other commands while the picker is up |
 | Tuple daemon hangs connecting to a dead Xwayland and never recovers | After an Xwayland crash the daemon must be killed; it never recovers on its own | Tuple | draft below | none |
 | The overlay's sharing border can't be thinner or rounded | A thick square border around the shared screen; no setting changes it | Tuple | draft below | none |
@@ -76,34 +76,37 @@ hyprland-preview-share-picker 0.2.1, NVIDIA RTX 5080, two monitors, Arch Linux.
 11. **`rooms` records no "favorited at" time**, so a client can't offer
     most-recently-favorited sorting.
 
-## Draft: report to hyprwm/Hyprland
+## Posted: hyprwm/Hyprland
 
-Filed on hyprwm/Hyprland (link lands here once open).
+[Posted to Discussions → Bugs - Other](https://github.com/hyprwm/Hyprland/discussions/16722)
+(2026-10-29); the text below mirrors it — keep this copy in sync if the
+discussion grows.
 
 Title: **Xwayland is not restarted after it crashes; every later X11 client
 hangs on connect until re-login**
 
-What happened: Xwayland segfaulted twice in one session — once the moment a
-screen share started, once while Hyprland was otherwise idle. Hyprland never
-started a new Xwayland, so every subsequent X11 client hung on connect, and
-only logging out and back in fixed it.
+What happened: In a Hyprland session, Xwayland crashed (its log: "Caught
+signal 11 (Segmentation fault). Server aborting"; coredumpctl records it as
+SIGABRT). Hyprland never started a new Xwayland. From then on, every X11
+client hung on connect, including xdg-desktop-portal-hyprland's share picker,
+and only logging out and back in fixed it.
 
-The socket stayed listening, but not because of the dead Xwayland:
-`ss -xlp` shows `/tmp/.X11-unix/X0` owned by the Hyprland process. Hyprland
-never spawns a new Xwayland to accept the queued connections, so clients
-connect and wait forever. Toggling `xwayland.enabled` off and on with
-`hyprctl eval` did not recover it either.
+The X11 socket stayed listening, but not because of the dead Xwayland:
+`ss -xlp` shows `/tmp/.X11-unix/X0` owned by the Hyprland process, with
+connections queued and never accepted. Toggling `xwayland.enabled` off and on
+with `hyprctl eval` did not recover it.
 
-Expected: Hyprland respawns a crashed Xwayland, or at least closes the stale
-socket so clients fail fast instead of hanging.
+Expected: Hyprland respawns a crashed Xwayland, or at least stops accepting on
+the stale socket so clients fail fast instead of hanging.
 
-Observed in one session: two Xwayland crashes (coredumpctl lists both as
-`/usr/bin/Xwayland`, SIGSEGV); after each, X11 clients hung on connect until
-re-login.
+Seen once so far. The same Xwayland crash (identical stack) happened in an
+earlier session when a screen share started; I didn't check X11 clients after
+that one.
 
 Versions: Hyprland 0.56.2 built from branch v0.56.2 at commit
-efb50993780079460b0cbed1363e2166a2de1d9f clean ([gha] Nix: update inputs);
-xorg-xwayland 24.1.14-1; NVIDIA RTX 5080, two monitors, Arch Linux.
+efb50993780079460b0cbed1363e2166a2de1d9f clean; xorg-xwayland 24.1.14-1;
+xdg-desktop-portal-hyprland 1.4.1; NVIDIA RTX 5080, two monitors, Arch Linux
+(Omarchy).
 
 ## Draft: report to freedesktop GitLab (Xwayland)
 
