@@ -303,7 +303,7 @@ Singleton {
 
   // `tuple login` opens the browser itself and prints the same link, which is
   // kept only so it can be opened again. The code the user pastes back goes
-  // to `tuple auth` as one argument and is not kept or shown anywhere.
+  // to the daemon over its socket (submitCode) and is not kept or shown anywhere.
   function signIn() {
     if (!installed || loginProcess.running) return
     loggingIn = true
