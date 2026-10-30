@@ -50,5 +50,6 @@ jobs:
           - [ ] Re-capture the JSON shapes Tuplet parses, sanitize them, and update \`tests/fixtures/\` if they changed.
           - [ ] Re-check the items in \`UPSTREAM.md\` that are waiting on Tuple.
           - [ ] Run both test suites.
+          - [ ] After the fix merges, submit the marketplace's Plugin verification form (Verify and publish a newer upstream commit) for the new main commit, so users get the update through Omarchy.
           EOF
           )"

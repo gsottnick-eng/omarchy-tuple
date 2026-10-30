@@ -224,24 +224,6 @@ function supportsShare(helpText) {
   return /^\s+share\s/m.test(text(helpText))
 }
 
-// Settings toggles need both verbs: reading the list and writing one value.
-function supportsSettings(helpText) {
-  return /^\s+settings\s/m.test(text(helpText)) && /^\s+set\s/m.test(text(helpText))
-}
-
-// `tuple settings` prints `name | value | description` lines, but the daemon
-// sometimes prefixes its log fields (4 or more `|` fields); keep only setting
-// lines.
-function parseSettings(raw) {
-  var out = {}
-  text(raw).split("\n").forEach(function(l) {
-    var fields = l.split("|")
-    if (fields.length !== 3) return
-    var name = fields[0].trim()
-    if (name !== "") out[name] = fields[1].trim()
-  })
-  return out
-}
 
 // Hyprland's instance signature is `<hash>_<epoch>_<n>`; the middle field is
 // when this compositor session started, in seconds since the epoch. "" when

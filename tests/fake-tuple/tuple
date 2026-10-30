@@ -93,7 +93,6 @@ need_call() { flag in_call || fail "not in a call"; }
 case "$*" in
   "--help")
     if flag no_share; then grep -v -E '^\s+(un)?share\s' "$FIXTURES/help.txt"
-    elif flag no_settings; then grep -v -E '^\s+(set|settings)\s' "$FIXTURES/help.txt"
     else cat "$FIXTURES/help.txt"; fi ;;
   "start") clear_flag stopped; echo "Tuple started. Run tuple to see available commands." ;;
   "stop") set_flag stopped; echo "exiting" ;;
@@ -113,8 +112,6 @@ case "$*" in
   "call unmute") need_call; clear_flag muted; echo "Unmuted" ;;
   "share") need_call; flag picker_holds || set_flag sharing; echo "screen share initiated" ;;
   "unshare") need_call; clear_flag sharing; echo "success" ;;
-  "settings") need_call; cat "$FIXTURES/settings.txt" ;;
-  "set "*) need_call; echo "Set $2 to $3" ;;
   "contacts favorite "*|"contacts unfavorite "*|"rooms favorite "*|"rooms unfavorite "*) need_login ;;
   *) fail "fake-tuple: unhandled command: $*" ;;
 esac

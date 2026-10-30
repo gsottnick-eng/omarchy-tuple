@@ -78,9 +78,7 @@ STORE_PROPS = (
     "installed",
     "binaryPath",
     "canShare",
-    "canSettings",
     "pickerPending",
-    "settings",
     "daemonRunning",
     "stoppedByUser",
     "loggedIn",
@@ -193,9 +191,6 @@ def apply_step(step: str, plugin: QObject, store: QObject, harness=None):
         Path(os.environ["FAKE_TUPLE_STATE"], argument).touch()
     elif name == "unflag":
         (Path(os.environ["FAKE_TUPLE_STATE"]) / argument).unlink(missing_ok=True)
-    elif name == "setting":
-        key, _, value = argument.partition("=")
-        invoke(store, "setSetting", key, value)
     elif name == "wait":
         pass
     else:

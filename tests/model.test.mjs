@@ -189,26 +189,6 @@ test("the status summary reads in priority order", () => {
   assert.equal(Model.statusSummary({ ...base, inCall: false }), "Ready")
 })
 
-test("settings parse from `name | value | description` lines; log-shaped lines are ignored", () => {
-  const raw = [
-    "overlay | 1 | Show the annotation layer while sharing",
-    "guest-mode | control | What you do on a screen you're viewing",
-    "2026-10-29T12:00:00Z|12345|12345|6|info|daemon log line | looks | similar | but longer",
-    "",
-    "   "
-  ].join("\n")
-  assert.deepEqual(Model.parseSettings(raw), { overlay: "1", "guest-mode": "control" })
-  assert.deepEqual(Model.parseSettings(""), {})
-})
-
-test("the settings toggles need both the settings and set verbs", () => {
-  assert.ok(Model.supportsSettings(fixture("help.txt")))
-  assert.ok(Model.supportsSettings("  settings  List settings\n  set     Update a setting"))
-  assert.ok(!Model.supportsSettings("  set     Update a setting"), "no settings verb")
-  assert.ok(!Model.supportsSettings("  settings  List settings"), "no set verb")
-  assert.ok(!Model.supportsSettings(""))
-})
-
 test("hyprland epoch and xwayland crash parsing", () => {
   assert.equal(Model.hyprlandEpoch("a1b2c3d4_1769000000_2"), "1769000000")
   assert.equal(Model.hyprlandEpoch(""), "")

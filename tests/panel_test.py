@@ -396,31 +396,6 @@ class PanelTest(unittest.TestCase):
             state["panel"]["opened"], "the picker must not open under the panel"
         )
 
-    def test_call_settings_are_read_once_and_written_as_arguments(self):
-        harness = self.harness(logged_in=True, in_call=True)
-        state = harness.run(
-            ["wait:300", "setting:overlay=0", "setting:guest-mode=control", "wait:800"]
-        )
-        self.assertEqual(
-            state["settings"]["overlay"], "0", "the toggle's new value is kept"
-        )
-        self.assertEqual(state["settings"]["guest-mode"], "control")
-        self.assertIn("settings", harness.argv())
-        self.assertIn("set overlay 0", harness.argv())
-        self.assertIn("set guest-mode control", harness.argv())
-        self.assertEqual(
-            [l for l in harness.argv() if l.startswith("settings")],
-            ["settings"],
-            "read once, not polled",
-        )
-
-    def test_the_settings_toggles_need_both_verbs(self):
-        harness = self.harness(logged_in=True, in_call=True, flags=("no_settings",))
-        state = harness.run(["wait:300"])
-        self.assertFalse(state["canSettings"])
-        self.assertNotIn("settings", harness.argv())
-        self.assertNotIn("set ", harness.argv())
-
     def test_stop_stays_stopped_until_start(self):
         harness = self.harness(logged_in=True)
         harness.run(["stop", "wait:3500", "start", "wait:1500"])

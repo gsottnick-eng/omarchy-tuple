@@ -584,58 +584,6 @@ Panel {
               }
             }
 
-            // Sharer-side settings, shown only while the client still offers
-            // them; they apply to what others can do with the shared screen.
-            ColumnLayout {
-              visible: TupleStore.inCall && TupleStore.canSettings
-              Layout.fillWidth: true
-              Layout.minimumHeight: implicitHeight
-              spacing: Style.space(4)
-
-              RowLayout {
-                Layout.fillWidth: true
-                spacing: Style.space(8)
-
-                Text {
-                  Layout.fillWidth: true
-                  text: "Let others draw on my screen"
-                  color: root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  textFormat: Text.PlainText
-                  elide: Text.ElideRight
-                }
-
-                ToggleSwitch {
-                  checked: TupleStore.settings["overlay"] === "1"
-                  busy: TupleStore.busy
-                  foreground: root.foreground
-                  onToggled: TupleStore.setSetting("overlay", checked ? "1" : "0")
-                }
-              }
-
-              RowLayout {
-                Layout.fillWidth: true
-                spacing: Style.space(8)
-
-                Text {
-                  Layout.fillWidth: true
-                  text: "When viewing a screen: " + (TupleStore.settings["guest-mode"] === "control" ? "Control" : "Draw")
-                  color: root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  textFormat: Text.PlainText
-                  elide: Text.ElideRight
-                }
-
-                ToggleSwitch {
-                  checked: TupleStore.settings["guest-mode"] === "control"
-                  busy: TupleStore.busy
-                  foreground: root.foreground
-                  onToggled: TupleStore.setSetting("guest-mode", checked ? "control" : "annotation")
-                }
-              }
-            }
           }
 
           // -------------------------------------------------------- rooms
