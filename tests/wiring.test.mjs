@@ -42,3 +42,25 @@ test("every IPC command in the README exists on the panel", () => {
   const missing = [...documented].filter((v) => !verbs.has(v)).sort()
   assert.deepEqual(missing, [], `README documents IPC commands the panel lacks: ${missing.join(", ")}`)
 })
+
+// AGENTS.md rule 8: text that comes from outside the plugin (names, statuses,
+// client and installer messages) renders as plain text, so markup someone else
+// typed can't style the panel or load a remote image.
+test("every Text showing outside text sets textFormat: Text.PlainText", () => {
+  const lines = panel.split("\n")
+  const unsafe = []
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^\s*Text \{\s*$/.test(lines[i])) continue
+    let depth = 0
+    let block = ""
+    for (let j = i; j < lines.length; j++) {
+      block += lines[j] + "\n"
+      depth += (lines[j].match(/\{/g) || []).length - (lines[j].match(/\}/g) || []).length
+      if (depth <= 0) break
+    }
+    const binding = (block.match(/^\s*text:[\s\S]*?(?=^\s*\w+(\.\w+)?:)/m) || [""])[0]
+    const outside = /\.(name|status|email|error|installMessage|calling|participants|occupants)\b|Label\(/.test(binding)
+    if (outside && !block.includes("Text.PlainText")) unsafe.push(`Panel.qml:${i + 1}`)
+  }
+  assert.deepEqual(unsafe, [])
+})

@@ -341,6 +341,7 @@ Panel {
               color: TupleStore.installing ? root.foreground : root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
+              textFormat: Text.PlainText
               wrapMode: Text.WordWrap
             }
 
@@ -977,6 +978,7 @@ Panel {
           color: root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
+          textFormat: Text.PlainText
           elide: Text.ElideRight
         }
       }

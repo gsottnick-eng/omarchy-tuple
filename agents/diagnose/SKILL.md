@@ -23,6 +23,9 @@ keep.
 - **The shell's log**: `qs list --all` names the running instance, and
   `qs log -i <instance>` prints it. Look for lines naming the plugin id from
   `manifest.json`.
+- **The panel's last error** is not in the prompt that opened you: errors can
+  name people or rooms, and the prompt was a command-line argument. Ask the user
+  what the panel showed.
 
 ## Rules while investigating
 

@@ -289,19 +289,19 @@ class PanelTest(unittest.TestCase):
     def test_calling_someone_uses_their_email_and_the_call_shows_up(self):
         harness = self.harness(logged_in=True)
         state = harness.run(["call:Grace Hopper", "wait:1200"])
-        self.assertIn("call start grace@example.com", harness.argv())
+        self.assertIn("call start -- grace@example.com", harness.argv())
         self.assertTrue(state["inCall"])
         self.assertEqual(state["calling"], "")
 
     def test_a_busy_contact_in_a_joinable_call_is_joined_not_rung(self):
         harness = self.harness(logged_in=True)
         harness.run(["call:Katherine Johnson", "wait:1000"])
-        self.assertIn("call join katherine@example.com", harness.argv())
+        self.assertIn("call join -- katherine@example.com", harness.argv())
 
     def test_joining_a_room_uses_its_slug(self):
         harness = self.harness(logged_in=True)
         state = harness.run(["join:room-16", "wait:1000"])
-        self.assertIn("rooms join room-16", harness.argv())
+        self.assertIn("rooms join -- room-16", harness.argv())
         self.assertTrue(state["inCall"])
 
     def test_a_pasted_link_must_be_https(self):
@@ -448,8 +448,10 @@ class PanelTest(unittest.TestCase):
 
     def test_diagnose_hands_the_agent_the_facts_and_the_skill(self):
         harness = self.harness(logged_in=True)
-        harness.run(["diagnose", "wait:500"])
+        harness.run(["join-url:http://not-https", "diagnose", "wait:500"])
         prompt = (harness.state / "agent-prompt").read_text()
+        # The prompt is a command line; errors can name people, so none goes in.
+        self.assertNotIn("Paste a full", prompt)
         self.assertIn("status:     Ready", prompt)
         self.assertIn("/agents/diagnose/SKILL.md", prompt)
         self.assertTrue(

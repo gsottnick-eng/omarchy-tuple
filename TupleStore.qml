@@ -266,13 +266,13 @@ Singleton {
     calling = person.name
     progress("Calling " + person.name + "…")
     callProcess.command = command(person.joinable
-      ? ["call", "join", person.email]
-      : ["call", "start", person.email])
+      ? ["call", "join", "--", person.email]
+      : ["call", "start", "--", person.email])
     callProcess.running = true
   }
 
   function joinRoom(room) {
-    if (room) run(["rooms", "join", room.slug], "Joining " + room.name + "…")
+    if (room) run(["rooms", "join", "--", room.slug], "Joining " + room.name + "…")
   }
 
   function joinUrl(url) {
@@ -281,16 +281,16 @@ Singleton {
       fail("Paste a full https:// call or room link.")
       return false
     }
-    run(["call", "join", value], "Joining…")
+    run(["call", "join", "--", value], "Joining…")
     return true
   }
 
   function favoritePerson(person) {
-    if (person) run(["contacts", person.favorite ? "unfavorite" : "favorite", person.email], "")
+    if (person) run(["contacts", person.favorite ? "unfavorite" : "favorite", "--", person.email], "")
   }
 
   function favoriteRoom(room) {
-    if (room) run(["rooms", room.favorite ? "unfavorite" : "favorite", room.slug], "")
+    if (room) run(["rooms", room.favorite ? "unfavorite" : "favorite", "--", room.slug], "")
   }
 
   // Links can be private (a sign-in link, a room link), so wl-copy reads them
@@ -378,11 +378,12 @@ Singleton {
 
   // Hands the problem to the user's default coding agent the way
   // `omarchy agent crash` does: the facts here, the method in the skill file.
+  // The prompt is a command-line argument, so it carries no error text: errors
+  // can name people or rooms. The agent asks the user what the panel showed.
   function diagnose() {
     if (diagnoseProcess.running) return
     var prompt = "Omatuple, the Tuple bar widget for Omarchy, is misbehaving and I want to know why.\n\n"
       + "  status:     " + summary + "\n"
-      + "  last error: " + (error || "none") + "\n"
       + "  tuple:      " + (binaryPath || "not found") + " " + version + "\n"
       + "  plugin:     " + pluginDir + "\n\n"
       + "Follow the skill at " + pluginDir + "/agents/diagnose/SKILL.md. "
