@@ -74,6 +74,7 @@ def apply_theme(theme: Path, font_size: int) -> None:
 
 
 STORE_PROPS = (
+    "shareWarned",
     "probed",
     "installed",
     "binaryPath",
@@ -100,7 +101,7 @@ STORE_PROPS = (
     "installMessage",
     "summary",
 )
-PANEL_PROPS = ("opened", "ready", "ringing", "search", "focusSection", "barText")
+PANEL_PROPS = ("opened", "ready", "ringing", "search", "focusSection", "barText", "shareWarningOpen")
 
 
 def read(obj: QObject, name: str, default=None):
@@ -160,11 +161,12 @@ def apply_step(step: str, plugin: QObject, store: QObject, harness=None):
         "install": (store, "install"),
         "diagnose": (store, "diagnose"),
     }
-    if name == "share-panel":
+    if name in ("share-panel", "share-anyway"):
         # QML functions on the panel aren't invokable from Python attributes or
         # the metaobject; evaluate in the panel's own QML context.
+        call = "shareFromPanel()" if name == "share-panel" else "shareAnyway()"
         expression = QQmlExpression(
-            QQmlEngine.contextForObject(plugin), plugin, "shareFromPanel()"
+            QQmlEngine.contextForObject(plugin), plugin, call
         )
         expression.evaluate()
         if expression.hasError():

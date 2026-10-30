@@ -398,6 +398,10 @@ Singleton {
   property string _authCode: ""
   property bool _updating: false
 
+  // Set once the user has seen the "sharing crashes X11 apps" warning and chose
+  // to share anyway. Memory only: it resets with the shell, like the crash does.
+  property bool shareWarned: false
+
   // True from Share until the client reports sharing or 60 s pass: the daemon
   // is blocked on the portal picker meanwhile.
   property bool pickerPending: false

@@ -348,9 +348,26 @@ class PanelTest(unittest.TestCase):
         self.assertIn("Xwayland stopped earlier", state["error"])
         self.assertFalse(state["pickerPending"])
 
-    def test_the_panel_closes_before_the_share_picker_opens(self):
+    def test_the_first_share_warns_and_shares_nothing_until_confirmed(self):
         harness = self.harness(logged_in=True, in_call=True)
         state = harness.run(["wait:300", "share-panel", "wait:400"])
+        self.assertNotIn("share", harness.argv())
+        self.assertTrue(state["panel"]["shareWarningOpen"])
+        self.assertTrue(state["panel"]["opened"], "the warning shows in the open panel")
+        self.assertFalse(state["shareWarned"])
+
+    def test_share_anyway_shares_and_later_shares_dont_warn_again(self):
+        harness = self.harness(logged_in=True, in_call=True)
+        state = harness.run(["wait:300", "share-panel", "wait:300", "share-anyway", "wait:600",
+                             "share-panel", "wait:400", "open", "wait:300", "share-panel", "wait:400"])
+        self.assertTrue(state["shareWarned"])
+        self.assertFalse(state["panel"]["shareWarningOpen"])
+        self.assertEqual(harness.argv().count("share") + harness.argv().count("unshare"), 3,
+                         "share, unshare, share: no warning after the first confirm")
+
+    def test_the_panel_closes_before_the_share_picker_opens(self):
+        harness = self.harness(logged_in=True, in_call=True)
+        state = harness.run(["wait:300", "share-panel", "wait:300", "share-anyway", "wait:400"])
         self.assertIn("share", harness.argv())
         self.assertFalse(
             state["panel"]["opened"], "the picker must not open under the panel"

@@ -133,6 +133,7 @@ Panel {
 
   onOpenedChanged: if (opened) {
     cursorActive = false
+    shareWarningOpen = false
     roomList.positionViewAtBeginning()
     peopleList.positionViewAtBeginning()
     if (!TupleStore.installed) TupleStore.probe()
@@ -160,7 +161,24 @@ Panel {
   // Sharing from the panel: close it first, so the portal picker never opens
   // underneath. The `s` key shares through this too; the IPC `share` verb has
   // no panel to close.
-  function shareFromPanel(): void { root.close(); TupleStore.toggleShare() }
+  // Starting a share crashes Xwayland on Hyprland (see UPSTREAM.md), so the
+  // first share of a session asks first. Stopping a share never does.
+  property bool shareWarningOpen: false
+
+  function shareFromPanel(): void {
+    if (!TupleStore.sharing && !TupleStore.shareWarned) {
+      shareWarningOpen = true
+      return
+    }
+    shareWarningOpen = false
+    root.close()
+    TupleStore.toggleShare()
+  }
+
+  function shareAnyway(): void {
+    TupleStore.shareWarned = true
+    shareFromPanel()
+  }
 
   BarIconButton {
     id: button
@@ -483,6 +501,40 @@ Panel {
                   hoverColor: root.urgent
                   fontFamily: root.fontFamily
                   onClicked: TupleStore.leave()
+                }
+              }
+            }
+
+            Column {
+              visible: root.shareWarningOpen && TupleStore.inCall && !TupleStore.sharing
+              width: parent.width
+              spacing: Style.space(6)
+
+              Text {
+                width: parent.width
+                text: "Sharing will crash any open X11 apps (Steam, Zoom, games). Log out and back in after you stop sharing to fix it."
+                color: root.urgent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                wrapMode: Text.WordWrap
+              }
+
+              Row {
+                spacing: Style.space(6)
+
+                Button {
+                  text: "Share anyway"
+                  bordered: true
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  onClicked: root.shareAnyway()
+                }
+
+                Button {
+                  text: "Cancel"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  onClicked: root.shareWarningOpen = false
                 }
               }
             }

@@ -146,12 +146,12 @@ rm -rf ~/.local/share/tuple       # your Tuple session and client settings
 These are bugs outside Tuplet — see [`UPSTREAM.md`](UPSTREAM.md) for the full
 list, who has to fix each one, and what we're waiting on. The big ones:
 
-- **Sharing your screen can crash Xwayland**, closing every X11 app you have
-  open. It happens inside Xwayland when Tuple's client starts remote control,
-  but Xwayland may also crash with no Tuple involvement at all. Hyprland does
-  not restart it, so after any crash every X11 app hangs until you log out and
-  back in — there is no `hyprctl` recovery. Seen with Tuple v2026_10_23.0 and
-  Xwayland 24.1.14.
+- **Starting a screen share crashes Xwayland**, closing every X11 app you have
+  open (Steam, Zoom, games). It happened every time in testing, the moment
+  Tuple's client started the share. Hyprland does not restart Xwayland, so X11
+  apps hang until you log out and back in. Tuplet warns you once per session
+  before your first share, and refuses to share again after a crash until you
+  log back in. Seen with Tuple v2026_10_23.0 and Xwayland 24.1.14.
 - **Screen sharing needs the client's `capture` setting on `auto`**, Tuple's
   default. The `x11` setting fails under Hyprland with
   `X11GetImage failed with UnexpectedX11Event`. If you changed it, set it back:
