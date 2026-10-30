@@ -1,14 +1,14 @@
 # Upstream problems
 
-Bugs outside Tuplet that we are waiting on. One row per problem; drafts for
+Bugs outside Omatuple that we are waiting on. One row per problem; drafts for
 each upstream follow the table. File links land here once reports are filed.
 
-| Problem | What the user sees | Who must fix it | Status | Tuplet's workaround |
+| Problem | What the user sees | Who must fix it | Status | Omatuple's workaround |
 | --- | --- | --- | --- | --- |
-| Xwayland segfaults (null deref) the moment Tuple starts a screen share | Every X11 app closes at once; the session and Wayland apps survive. Verified: both shares started on Hyprland on 2026-10-29 crashed Xwayland in the same second; it also crashed once with Tuple idle | X.org/Xwayland (freedesktop GitLab), and Tuple's Linux client for what it sends | draft below | Tuplet warns before every share, with a "Why does sharing break my desktop?" help section. **Remove when fixed:** delete everything tagged `XWAYLAND-SHARE-WORKAROUND` in the code and tests, and the `warnBeforeSharing` setting in `manifest.json` |
+| Xwayland segfaults (null deref) the moment Tuple starts a screen share | Every X11 app closes at once; the session and Wayland apps survive. Verified: both shares started on Hyprland on 2026-10-29 crashed Xwayland in the same second; it also crashed once with Tuple idle | X.org/Xwayland (freedesktop GitLab), and Tuple's Linux client for what it sends | draft below | Omatuple warns before every share, with a "Why does sharing break my desktop?" help section. **Remove when fixed:** delete everything tagged `XWAYLAND-SHARE-WORKAROUND` in the code and tests, and the `warnBeforeSharing` setting in `manifest.json` |
 | Tuple's screen viewer is an X11 window | Viewing someone's screen works (tested 2026-10-29 with a macOS sharer: drawing and control both work, Xwayland survived), but it needs Xwayland, so after a share has crashed Xwayland you can't view until you log back in | Tuple (a native Wayland viewer would avoid it) | not reported | documented in README |
-| Hyprland never restarts Xwayland after it dies | After any Xwayland crash, every X11 app hangs on connect until you log out and back in; `hyprctl` toggling `xwayland.enabled` does not recover it | hyprwm/Hyprland | not reported: Hyprland only accepts reports written by a person (see below) | Tuplet refuses to share when a core dump says Xwayland died this session, and says why |
-| Tuple daemon blocks completely while the portal screen picker is open | Every `tuple` command and follow stream stalls until a screen is picked or the picker closes | Tuple | draft below | Tuplet closes the panel before sharing, explains the wait, and refuses other commands while the picker is up |
+| Hyprland never restarts Xwayland after it dies | After any Xwayland crash, every X11 app hangs on connect until you log out and back in; `hyprctl` toggling `xwayland.enabled` does not recover it | hyprwm/Hyprland | not reported: Hyprland only accepts reports written by a person (see below) | Omatuple refuses to share when a core dump says Xwayland died this session, and says why |
+| Tuple daemon blocks completely while the portal screen picker is open | Every `tuple` command and follow stream stalls until a screen is picked or the picker closes | Tuple | draft below | Omatuple closes the panel before sharing, explains the wait, and refuses other commands while the picker is up |
 | Tuple daemon hangs connecting to a dead Xwayland and never recovers | After an Xwayland crash the daemon must be killed; it never recovers on its own | Tuple | draft below | none |
 | The overlay's sharing border can't be thinner or rounded | Square purple corner brackets, about 12 px thick on a 4K screen, drawn by Tuple's own `tuple-overlay` layer (verified 2026-10-29); no setting changes them | Tuple | draft below | none |
 | Annotation colors aren't per person like on macOS | Everyone draws in the same color, so you can't tell who drew what | Tuple | draft below | none |
@@ -17,8 +17,8 @@ each upstream follow the table. File links land here once reports are filed.
 | Remote control drives the host's real pointer instead of a separate one, and host movement steals it back | The person sharing fights their own pointer; moving the mouse hijacks control back. Verified 2026-10-29; the client injects input through Wayland (it kept working after Xwayland died), into the one system pointer | Tuple (may also need compositor support) | draft below | none |
 | The remote cursor is oversized and doesn't scale with resolution | A huge pointer on high-DPI screens | Tuple | not reproduced: the size looked fine in the 2026-10-29 test; reopen if it comes back | none |
 | No annotation toolbar for the person sharing | You can't pick tools or undo what viewers drew while sharing | Tuple | draft below | none |
-| `share` and `unshare` are deprecated with no replacement | Screen sharing hangs on deprecated verbs; a future client could drop them with nothing to take their place | Tuple | draft below | Tuplet hides Share if `tuple --help` stops listing the verbs |
-| The client records no "favorited at" time, so favorites can't sort by recency | Favorites can only sort alphabetically | Tuple | draft below | Tuplet sorts favorites A to Z |
+| `share` and `unshare` are deprecated with no replacement | Screen sharing hangs on deprecated verbs; a future client could drop them with nothing to take their place | Tuple | draft below | Omatuple hides Share if `tuple --help` stops listing the verbs |
+| The client records no "favorited at" time, so favorites can't sort by recency | Favorites can only sort alphabetically | Tuple | draft below | Omatuple sorts favorites A to Z |
 
 ## Draft: report to Tuple support
 
