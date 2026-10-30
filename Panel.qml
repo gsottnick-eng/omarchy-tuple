@@ -134,6 +134,7 @@ Panel {
   onOpenedChanged: if (opened) {
     cursorActive = false
     shareWarningOpen = false
+    shareHelpOpen = false
     roomList.positionViewAtBeginning()
     peopleList.positionViewAtBeginning()
     if (!TupleStore.installed) TupleStore.probe()
@@ -161,23 +162,48 @@ Panel {
   // Sharing from the panel: close it first, so the portal picker never opens
   // underneath. The `s` key shares through this too; the IPC `share` verb has
   // no panel to close.
-  // Starting a share crashes Xwayland on Hyprland (see UPSTREAM.md), so the
-  // first share of a session asks first. Stopping a share never does.
+  // XWAYLAND-SHARE-WORKAROUND: starting a share crashes Xwayland on Hyprland (UPSTREAM.md), so
+  // every share asks first, until the user turns the warning off. Stopping a
+  // share never asks. Temporary: delete everything tagged XWAYLAND-SHARE-WORKAROUND (here, the
+  // warning row, the help section and its footer button, the manifest setting,
+  // their tests) once the upstream fix ships; shareFromPanel() then just calls
+  // shareAnyway().
   property bool shareWarningOpen: false
+  property bool shareHelpOpen: false
+  readonly property bool warnBeforeSharing: Model.toBool(setting("warnBeforeSharing", true), true)
 
   function shareFromPanel(): void {
-    if (!TupleStore.sharing && !TupleStore.shareWarned) {
+    if (!TupleStore.sharing && warnBeforeSharing) {
       shareWarningOpen = true
       return
     }
+    shareAnyway()
+  }
+
+  function shareAnyway(): void {
     shareWarningOpen = false
     root.close()
     TupleStore.toggleShare()
   }
 
-  function shareAnyway(): void {
-    TupleStore.shareWarned = true
-    shareFromPanel()
+  function shareAndStopWarning(): void {
+    persistSettings({ warnBeforeSharing: false })
+    shareAnyway()
+  }
+
+  function toggleShareHelp(): void {
+    shareHelpOpen = !shareHelpOpen
+  }
+
+  // Omarchy's own pattern (its clock panel): apply locally so the panel
+  // updates on the click, then write this widget's shell.json entry.
+  function persistSettings(values) {
+    var entry = { id: root.moduleName }
+    for (var existing in root.settings) if (existing !== "id") entry[existing] = root.settings[existing]
+    for (var key in values) entry[key] = values[key]
+    root.settings = entry
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
   }
 
   BarIconButton {
@@ -505,6 +531,7 @@ Panel {
               }
             }
 
+            // XWAYLAND-SHARE-WORKAROUND: the warning row.
             Column {
               visible: root.shareWarningOpen && TupleStore.inCall && !TupleStore.sharing
               width: parent.width
@@ -528,6 +555,24 @@ Panel {
                   foreground: root.foreground
                   fontFamily: root.fontFamily
                   onClicked: root.shareAnyway()
+                }
+
+                // Fades in over a second, clickable only once fully shown, so
+                // the warning gets read before it can be turned off for good.
+                Button {
+                  text: "Don't show again"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  opacity: 0
+                  enabled: opacity >= 1
+                  onClicked: root.shareAndStopWarning()
+
+                  NumberAnimation on opacity {
+                    from: 0
+                    to: 1
+                    duration: 1000
+                    running: root.shareWarningOpen
+                  }
                 }
 
                 Button {
@@ -691,6 +736,51 @@ Panel {
             }
           }
 
+          // --------------------------------------------- why sharing breaks
+          // XWAYLAND-SHARE-WORKAROUND: the help section.
+          Column {
+            visible: root.shareHelpOpen
+            Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
+            spacing: Style.space(6)
+
+            PanelSectionHeader {
+              text: "WHY SHARING BREAKS X11 APPS"
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+            }
+
+            Text {
+              width: parent.width
+              text: "Starting a screen share makes Xwayland crash. Xwayland is the part of your desktop that runs older X11 apps like Steam, Zoom and many games. "
+                + "This isn't Tuplet: it happens inside Tuple's Linux client and Xwayland, and Hyprland doesn't restart Xwayland afterwards. "
+                + "Tuple, X.org and Hyprland have to fix it.\n\n"
+                + "Until then: close X11 apps before sharing, and log out and back in after you stop sharing."
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              wrapMode: Text.WordWrap
+            }
+
+            Row {
+              spacing: Style.space(6)
+
+              Button {
+                text: "Details"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: Qt.openUrlExternally("file://" + TupleStore.pluginDir + "/UPSTREAM.md")
+              }
+
+              Button {
+                text: "Close"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: root.shareHelpOpen = false
+              }
+            }
+          }
+
           // ------------------------------------------------------- footer
           Item {
             visible: TupleStore.probed
@@ -724,6 +814,15 @@ Panel {
                 foreground: root.accent
                 fontFamily: root.fontFamily
                 onClicked: TupleStore.install()
+              }
+
+              // XWAYLAND-SHARE-WORKAROUND: the help button.
+              PanelActionButton {
+                iconText: "\u{f02d7}"
+                tooltipText: "Why does sharing break my desktop?"
+                foreground: root.shareHelpOpen ? root.accent : root.foreground
+                fontFamily: root.fontFamily
+                onClicked: root.toggleShareHelp()
               }
 
               PanelActionButton {

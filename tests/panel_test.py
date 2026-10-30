@@ -70,7 +70,7 @@ class Harness:
             PATH=f"{FAKE_CLIENT_DIR}:{path}" if installed else path,
         )
 
-    def run(self, steps=(), settle=1500, step_delay=700):
+    def run(self, steps=(), settle=1500, step_delay=700, settings=None):
         dumps = self.workdir / "dumps"
         final = self.workdir / "final.json"
         command = [
@@ -88,6 +88,8 @@ class Harness:
             str(step_delay),
             "--theme",
             "tokyo-night",
+            "--settings",
+            json.dumps(settings or {}),
             "--do",
             ",".join(steps),
         ]
@@ -348,22 +350,43 @@ class PanelTest(unittest.TestCase):
         self.assertIn("Xwayland stopped earlier", state["error"])
         self.assertFalse(state["pickerPending"])
 
-    def test_the_first_share_warns_and_shares_nothing_until_confirmed(self):
+    # XWAYLAND-SHARE-WORKAROUND: the tests from here to the help-button test go with the warning.
+    def test_sharing_warns_first_and_shares_nothing_until_confirmed(self):
         harness = self.harness(logged_in=True, in_call=True)
         state = harness.run(["wait:300", "share-panel", "wait:400"])
         self.assertNotIn("share", harness.argv())
         self.assertTrue(state["panel"]["shareWarningOpen"])
         self.assertTrue(state["panel"]["opened"], "the warning shows in the open panel")
-        self.assertFalse(state["shareWarned"])
 
-    def test_share_anyway_shares_and_later_shares_dont_warn_again(self):
+    def test_share_anyway_shares_and_the_next_share_warns_again(self):
         harness = self.harness(logged_in=True, in_call=True)
         state = harness.run(["wait:300", "share-panel", "wait:300", "share-anyway", "wait:600",
-                             "share-panel", "wait:400", "open", "wait:300", "share-panel", "wait:400"])
-        self.assertTrue(state["shareWarned"])
+                             "share-panel", "wait:500", "open", "wait:300", "share-panel", "wait:400"])
+        self.assertEqual([l for l in harness.argv() if l in ("share", "unshare")], ["share", "unshare"],
+                         "Share anyway shares; stopping never warns")
+        self.assertTrue(state["panel"]["shareWarningOpen"], "the next share warns again")
+        self.assertEqual(state["barWrites"], [], "Share anyway saves nothing")
+
+    def test_dont_show_again_shares_and_turns_the_warning_off_for_good(self):
+        harness = self.harness(logged_in=True, in_call=True)
+        state = harness.run(["wait:300", "share-panel", "wait:300", "share-dont-warn", "wait:600",
+                             "share-panel", "wait:500", "share-panel", "wait:400"])
+        self.assertEqual([l for l in harness.argv() if l in ("share", "unshare")], ["share", "unshare", "share"])
         self.assertFalse(state["panel"]["shareWarningOpen"])
-        self.assertEqual(harness.argv().count("share") + harness.argv().count("unshare"), 3,
-                         "share, unshare, share: no warning after the first confirm")
+        self.assertEqual(state["barWrites"][-1].get("warnBeforeSharing"), False,
+                         "the choice is saved to the widget's shell.json entry")
+
+    def test_with_the_warning_turned_off_sharing_starts_at_once(self):
+        harness = self.harness(logged_in=True, in_call=True)
+        state = harness.run(["wait:300", "share-panel", "wait:400"], settings={"warnBeforeSharing": "false"})
+        self.assertIn("share", harness.argv())
+        self.assertFalse(state["panel"]["shareWarningOpen"])
+
+    def test_the_help_button_explains_why_sharing_breaks_the_desktop(self):
+        harness = self.harness(logged_in=True)
+        harness.run(["wait:300", "share-help", "wait:300", "share-help", "wait:300"])
+        self.assertTrue(harness.after(1)["panel"]["shareHelpOpen"])
+        self.assertFalse(harness.final["panel"]["shareHelpOpen"])
 
     def test_the_panel_closes_before_the_share_picker_opens(self):
         harness = self.harness(logged_in=True, in_call=True)

@@ -20,7 +20,8 @@
     "defaultSection": "right",
     "defaults": {
       "showLabel": false,
-      "callAlerts": true
+      "callAlerts": true,
+      "warnBeforeSharing": true
     },
     "schema": [
       {
@@ -33,6 +34,12 @@
         "key": "callAlerts",
         "type": "boolean",
         "label": "Notify when a call starts or ends",
+        "defaultValue": true
+      },
+      {
+        "key": "warnBeforeSharing",
+        "type": "boolean",
+        "label": "Warn before sharing your screen (sharing crashes X11 apps)",
         "defaultValue": true
       }
     ]

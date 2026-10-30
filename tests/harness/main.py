@@ -74,7 +74,6 @@ def apply_theme(theme: Path, font_size: int) -> None:
 
 
 STORE_PROPS = (
-    "shareWarned",
     "probed",
     "installed",
     "binaryPath",
@@ -101,7 +100,7 @@ STORE_PROPS = (
     "installMessage",
     "summary",
 )
-PANEL_PROPS = ("opened", "ready", "ringing", "search", "focusSection", "barText", "shareWarningOpen")
+PANEL_PROPS = ("opened", "ready", "ringing", "search", "focusSection", "barText", "shareWarningOpen", "shareHelpOpen")
 
 
 def read(obj: QObject, name: str, default=None):
@@ -121,6 +120,9 @@ def snapshot(plugin: QObject, store: QObject) -> dict:
     state["panel"] = {name: read(plugin, name) for name in PANEL_PROPS}
     state["panel"]["rooms"] = read(plugin, "rooms", [])
     state["panel"]["people"] = read(plugin, "people", [])
+    state["panel"]["settings"] = read(plugin, "settings", {})
+    bar = plugin.property("bar")
+    state["barWrites"] = read(bar, "writes", []) if bar is not None else []
     state["detached"] = core.DETACHED
     return state
 
@@ -161,10 +163,12 @@ def apply_step(step: str, plugin: QObject, store: QObject, harness=None):
         "install": (store, "install"),
         "diagnose": (store, "diagnose"),
     }
-    if name in ("share-panel", "share-anyway"):
+    panel_calls = {"share-panel": "shareFromPanel()", "share-anyway": "shareAnyway()",
+                   "share-dont-warn": "shareAndStopWarning()", "share-help": "toggleShareHelp()"}
+    if name in panel_calls:
         # QML functions on the panel aren't invokable from Python attributes or
         # the metaobject; evaluate in the panel's own QML context.
-        call = "shareFromPanel()" if name == "share-panel" else "shareAnyway()"
+        call = panel_calls[name]
         expression = QQmlExpression(
             QQmlEngine.contextForObject(plugin), plugin, call
         )
