@@ -81,7 +81,7 @@ this plugin is built on. Behaviour that is not obvious from `tuple --help`:
 Parser tests, Node only:
 
 ```bash
-node --test tests/
+node --test 'tests/*.test.mjs'
 ```
 
 Panel tests load the real plugin with Omarchy's real `Commons` and `Ui`
