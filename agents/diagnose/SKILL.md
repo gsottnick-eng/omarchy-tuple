@@ -1,9 +1,9 @@
 ---
-name: tuplet-diagnose
-description: Diagnose a problem with Tuplet, the Tuple bar widget for Omarchy, and, if it is Tuplet's bug and the user agrees, fix it with a pull request or report it upstream. Use when Tuplet's "Diagnose with my agent" button sends you here, or when a user says Tuplet, the Tuple bar widget, or Tuple on Omarchy misbehaves.
+name: omatuple-diagnose
+description: Diagnose a problem with Omatuple, the Tuple bar widget for Omarchy, and, if it is Omatuple's bug and the user agrees, fix it with a pull request or report it upstream. Use when Omatuple's "Diagnose with my agent" button sends you here, or when a user says Omatuple, the Tuple bar widget, or Tuple on Omarchy misbehaves.
 ---
 
-# Diagnosing Tuplet
+# Diagnosing Omatuple
 
 Work from evidence. The goal is an honest account of what went wrong and who
 can fix it, not a plausible story. Read `AGENTS.md` at the root of the plugin
@@ -12,7 +12,7 @@ keep.
 
 ## Where things are
 
-- **The plugin folder** is the directory two levels above this file. Tuplet
+- **The plugin folder** is the directory two levels above this file. Omatuple
   installed with `omarchy plugin add` is a git clone, so
   `git -C <plugin folder> remote get-url origin` names the repository to report
   to. Never assume a repository: if there is no remote, there is nowhere to
@@ -44,24 +44,24 @@ keep.
 
 ## Whose bug is it?
 
-Be strict here. Tuplet is a thin layer over Tuple's command-line client and
+Be strict here. Omatuple is a thin layer over Tuple's command-line client and
 Omarchy's shell, so most failures belong to one of those.
 
-- **Tuplet**: the panel shows the wrong state, sends the wrong command, ignores
+- **Omatuple**: the panel shows the wrong state, sends the wrong command, ignores
   an error, breaks the layout, or does not follow a rule in `AGENTS.md`.
 - **Tuple's client** (report to Tuple, not here): `tuple` itself crashes, hangs,
   or answers wrongly when run by hand in a terminal with the same arguments.
 - **Omarchy or Hyprland**: the bar, the shell, or the compositor fails the same
-  way with Tuplet disabled (`omarchy plugin disable <id>`).
+  way with Omatuple disabled (`omarchy plugin disable <id>`).
 
 The "Known issues" section of `README.md` lists failures already traced to Tuple
 or Hyprland. Check it before anything else.
 
-If it is not Tuplet's bug, say whose it is, give the evidence, and stop.
+If it is not Omatuple's bug, say whose it is, give the evidence, and stop.
 
 ## Fixing it
 
-If it is Tuplet's bug and you can fix it:
+If it is Omatuple's bug and you can fix it:
 
 1. Work in a clone of the repository from the remote, not in the installed
    plugin folder, so the user's working copy stays untouched.
@@ -72,7 +72,7 @@ If it is Tuplet's bug and you can fix it:
 
 ## Three conditions before anything leaves this machine
 
-1. **It is a verified Tuplet bug**, established on evidence.
+1. **It is a verified Omatuple bug**, established on evidence.
 2. **The user has explicitly agreed**, after seeing exactly what will be posted.
    Never open a pull request or issue unprompted.
 3. **`gh auth status` succeeds.** If `gh` is missing or signed out, do not
@@ -92,7 +92,7 @@ Then either:
 - **an issue**, when you could not fix it: `gh issue create --repo <owner/repo>`.
 
 Include what happened, what was expected, how to reproduce it with the fake
-client, the Tuplet version, `tuple version`, and `omarchy version`.
+client, the Omatuple version, `tuple version`, and `omarchy version`.
 
 End the pull request or issue with a line naming the model and agent harness
 that wrote it, so a reader knows it was machine-authored:

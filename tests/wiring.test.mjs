@@ -33,7 +33,7 @@ test("every TupleStore member the panel uses exists on the store", () => {
 test("every IPC command in the README exists on the panel", () => {
   const readme = readFileSync(join(root, "README.md"), "utf8")
   const documented = new Set([
-    ...[...readme.matchAll(/omarchy-shell io\.github\.gsottnick\.tuple (\w+)/g)].map((m) => m[1]),
+    ...[...readme.matchAll(/omarchy-shell io\.github\.gsottnick\.omatuple (\w+)/g)].map((m) => m[1]),
     ...[...(readme.match(/^Also (.+)\.$/m)?.[1] ?? "").matchAll(/`(\w+)/g)].map((m) => m[1]),
   ])
   const handler = panel.slice(panel.indexOf("IpcHandler {"), panel.indexOf("BarIconButton {"))

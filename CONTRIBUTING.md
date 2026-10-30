@@ -1,4 +1,4 @@
-# Contributing to Tuplet
+# Contributing to Omatuple
 
 Pull requests are welcome, from people and from coding agents. This page says
 what a PR needs to merge. [`AGENTS.md`](AGENTS.md) has the full background:
@@ -22,7 +22,7 @@ The Node tests include three guards worth knowing before you start:
   Tuple room links.
 - **The panel only uses what the store has** (`tests/wiring.test.mjs`). Every
   `TupleStore.<name>` in `Panel.qml` must exist in `TupleStore.qml`.
-- **The README's commands exist.** Every `omarchy-shell io.github.gsottnick.tuple <command>`
+- **The README's commands exist.** Every `omarchy-shell io.github.gsottnick.omatuple <command>`
   the README documents must exist in the panel's IPC handler.
 
 The Panel tests job also fails if a symlink is committed, because Omarchy's

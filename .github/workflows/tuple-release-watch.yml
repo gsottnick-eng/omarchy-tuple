@@ -1,4 +1,4 @@
-# Opens an issue when Tuple publishes a new Linux client, so Tuplet can be
+# Opens an issue when Tuple publishes a new Linux client, so Omatuple can be
 # checked against it. Uses the plugin's own installer to ask Tuple's release
 # service, so the endpoint lives in one place.
 name: Tuple release watch
@@ -38,16 +38,16 @@ jobs:
             exit 0
           fi
           gh label create tuple-release --color 5319e7 \
-            --description "A new Tuple Linux client to check Tuplet against" 2>/dev/null || true
+            --description "A new Tuple Linux client to check Omatuple against" 2>/dev/null || true
           gh issue create --title "$title" --label tuple-release --body "$(cat <<EOF
           Tuple published **$VERSION** of its Linux client.
 
-          To check Tuplet against it (see AGENTS.md):
+          To check Omatuple against it (see AGENTS.md):
 
           - [ ] Install it: \`bin/tuple-install\`, or the panel's update button.
-          - [ ] Compare \`tuple --help\` and the subcommands Tuplet uses with \`tests/fixtures/help.txt\`.
+          - [ ] Compare \`tuple --help\` and the subcommands Omatuple uses with \`tests/fixtures/help.txt\`.
           - [ ] Check whether \`share\`/\`unshare\`/\`settings\`/\`set\` are still listed.
-          - [ ] Re-capture the JSON shapes Tuplet parses, sanitize them, and update \`tests/fixtures/\` if they changed.
+          - [ ] Re-capture the JSON shapes Omatuple parses, sanitize them, and update \`tests/fixtures/\` if they changed.
           - [ ] Re-check the items in \`UPSTREAM.md\` that are waiting on Tuple.
           - [ ] Run both test suites.
           - [ ] After the fix merges, submit the marketplace's Plugin verification form (Verify and publish a newer upstream commit) for the new main commit, so users get the update through Omarchy.

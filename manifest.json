@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.gsottnick.tuple",
-  "name": "Tuplet",
-  "version": "2.3.5",
+  "id": "io.github.gsottnick.omatuple",
+  "name": "Omatuple",
+  "version": "2.4.0",
   "author": "Gavin Sottnick",
   "license": "MIT",
-  "description": "Tuplet installs Tuple and runs pair programming from the Omarchy bar: rooms, people, and call controls in one dropdown.",
+  "description": "Omatuple installs Tuple and runs pair programming from the Omarchy bar: rooms, people, and call controls in one dropdown.",
   "kinds": [
     "bar-widget"
   ],
@@ -13,7 +13,7 @@
     "barWidget": "Panel.qml"
   },
   "barWidget": {
-    "displayName": "Tuplet",
+    "displayName": "Omatuple",
     "description": "Sign in, call a teammate, join a room, and control screen sharing without leaving the bar.",
     "category": "Communication",
     "allowMultiple": false,

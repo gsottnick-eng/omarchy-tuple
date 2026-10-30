@@ -1,10 +1,10 @@
-# Tuplet
+# Omatuple
 
-Tuple, the pair-programming app, in the Omarchy bar. Tuplet installs Tuple's
+Tuple, the pair-programming app, in the Omarchy bar. Omatuple installs Tuple's
 Linux client for you and gives it the dropdown it doesn't ship with: your
 rooms, your people, and call controls, one click from the bar.
 
-![The Tuplet dropdown](preview.png)
+![The Omatuple dropdown](preview.png)
 
 ## Features
 
@@ -52,9 +52,9 @@ Right-click the bar icon during a call to mute.
 ### Bind keys to calls
 
 ```bash
-omarchy-shell io.github.gsottnick.tuple mute
-omarchy-shell io.github.gsottnick.tuple leave
-omarchy-shell io.github.gsottnick.tuple toggle
+omarchy-shell io.github.gsottnick.omatuple mute
+omarchy-shell io.github.gsottnick.omatuple leave
+omarchy-shell io.github.gsottnick.omatuple toggle
 ```
 
 Also `share`, `accept`, `join <link>`, `status`, `open`, `close`, and `diagnose`.
@@ -69,24 +69,25 @@ Also `share`, `accept`, `join <link>`, `status`, `open`, `close`, and `diagnose`
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/gsottnick/omarchy-tuple.git --enable
+omarchy plugin add https://github.com/gsottnick/omatuple.git --enable
 ```
 
 The widget lands on the right of the bar. Move it with:
 
 ```bash
-omarchy bar move io.github.gsottnick.tuple --section left
+omarchy bar move io.github.gsottnick.omatuple --section left
 ```
 
-Installed before the plugin id changed (`io.github.gsottnick-eng.tuple`)?
-Remove it under the old id and add it again; your Tuple sign-in is unaffected:
+Installed it before it was called Omatuple, under the id
+`io.github.gsottnick.tuple` or `io.github.gsottnick-eng.tuple`? Remove it
+under that id and add it again; your Tuple sign-in is unaffected:
 
 ```bash
-omarchy plugin remove io.github.gsottnick-eng.tuple
-omarchy plugin add https://github.com/gsottnick/omarchy-tuple.git --enable
+omarchy plugin remove io.github.gsottnick.tuple   # or io.github.gsottnick-eng.tuple
+omarchy plugin add https://github.com/gsottnick/omatuple.git --enable
 ```
 
-Then update any keybindings that call `omarchy-shell io.github.gsottnick-eng.tuple`.
+Then update any keybindings that call `omarchy-shell` with the old id.
 
 Open the dropdown. If Tuple isn't installed, it offers to install it. Then
 **Sign in**: your browser opens Tuple's sign-in page, and you paste the
@@ -122,17 +123,17 @@ Run it yourself if you'd rather:
 From the command line:
 
 ```bash
-omarchy bar set io.github.gsottnick.tuple showLabel true
-omarchy bar set io.github.gsottnick.tuple callAlerts false
+omarchy bar set io.github.gsottnick.omatuple showLabel true
+omarchy bar set io.github.gsottnick.omatuple callAlerts false
 ```
 
-Tuplet stores nothing about your account. Your rooms, people, and who you're
+Omatuple stores nothing about your account. Your rooms, people, and who you're
 signed in as come from Tuple every time.
 
 ## Remove
 
 ```bash
-omarchy plugin remove io.github.gsottnick.tuple
+omarchy plugin remove io.github.gsottnick.omatuple
 ```
 
 That removes the widget and its settings. The Tuple client stays, since you
@@ -147,13 +148,13 @@ rm -rf ~/.local/share/tuple       # your Tuple session and client settings
 
 ## Known issues
 
-These are bugs outside Tuplet — see [`UPSTREAM.md`](UPSTREAM.md) for the full
+These are bugs outside Omatuple — see [`UPSTREAM.md`](UPSTREAM.md) for the full
 list, who has to fix each one, and what we're waiting on. The big ones:
 
 - **Starting a screen share crashes Xwayland**, closing every X11 app you have
   open (Steam, Zoom, games). It happened every time in testing, the moment
   Tuple's client started the share. Hyprland does not restart Xwayland, so X11
-  apps hang until you log out and back in. Tuplet warns you before each share
+  apps hang until you log out and back in. Omatuple warns you before each share
   (you can turn that off), and refuses to share again after a crash until you
   log back in. Seen with Tuple v2026_10_23.0 and Xwayland 24.1.14.
 - **After you share your own screen, you can't watch anyone else's until you
@@ -165,23 +166,23 @@ list, who has to fix each one, and what we're waiting on. The big ones:
   `X11GetImage failed with UnexpectedX11Event`. If you changed it, set it back:
   `tuple set capture auto`.
 - **`share` and `unshare` are deprecated** in Tuple's client, with no
-  replacement yet. Tuplet hides the share button if a future client drops
+  replacement yet. Omatuple hides the share button if a future client drops
   them. To be resolved by **Tuple**.
 
 ## Getting help
 
 Click the bug button in the panel, or run
-`omarchy-shell io.github.gsottnick.tuple diagnose`. Omarchy opens your default
-coding agent with what Tuplet knows about the problem and a guide for
+`omarchy-shell io.github.gsottnick.omatuple diagnose`. Omarchy opens your default
+coding agent with what Omatuple knows about the problem and a guide for
 diagnosing it ([`agents/diagnose/SKILL.md`](agents/diagnose/SKILL.md)). The
-agent works out whether it's Tuplet's bug, Tuple's, or Omarchy's. If it's
-Tuplet's and it can fix it, it prepares a pull request here. Nothing is posted
+agent works out whether it's Omatuple's bug, Tuple's, or Omarchy's. If it's
+Omatuple's and it can fix it, it prepares a pull request here. Nothing is posted
 without your approval, and your contacts and rooms are kept out of anything it
 writes.
 
 Set a default agent first if you haven't: `omarchy default agent <name>`.
 
-You can also [open an issue](https://github.com/gsottnick/omarchy-tuple/issues).
+You can also [open an issue](https://github.com/gsottnick/omatuple/issues).
 
 ## Development
 

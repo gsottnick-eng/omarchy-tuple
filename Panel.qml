@@ -12,8 +12,8 @@ import "Model.js" as Model
 // for every monitor.
 Panel {
   id: root
-  moduleName: "io.github.gsottnick.tuple"
-  ipcTarget: "io.github.gsottnick.tuple"
+  moduleName: "io.github.gsottnick.omatuple"
+  ipcTarget: "io.github.gsottnick.omatuple"
   // The handler below adds call verbs to open/close. Built once per monitor,
   // only the first registers; the rest log a warning, as first-party widgets do.
   manageIpc: false
@@ -539,7 +539,7 @@ Panel {
 
               Text {
                 width: parent.width
-                text: "Sharing will crash your open X11 apps (Steam, Zoom, games) and stop you from viewing others' screens until you log out and back in, which closes your open apps. This is a Tuple and Xwayland bug, not Tuplet."
+                text: "Sharing will crash your open X11 apps (Steam, Zoom, games) and stop you from viewing others' screens until you log out and back in, which closes your open apps. This is a Tuple and Xwayland bug, not Omatuple."
                 color: root.urgent
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
@@ -701,7 +701,7 @@ Panel {
             Text {
               width: parent.width
               text: "Starting a screen share makes Xwayland crash. Xwayland is the part of your desktop that runs older X11 apps like Steam, Zoom and many games, and Tuple's own window for viewing other people's screens. "
-                + "This isn't Tuplet: it happens inside Tuple's Linux client and Xwayland, and Hyprland doesn't restart Xwayland afterwards. "
+                + "This isn't Omatuple: it happens inside Tuple's Linux client and Xwayland, and Hyprland doesn't restart Xwayland afterwards. "
                 + "Tuple, X.org and Hyprland have to fix it.\n\n"
                 + "After you share, X11 apps won't open and you can't view anyone's screen until you log out and back in, and logging out closes your open apps. "
                 + "Until it's fixed: close X11 apps before sharing, and plan to log out and back in afterwards."

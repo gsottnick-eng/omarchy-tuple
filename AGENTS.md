@@ -1,6 +1,6 @@
-# Notes for agents working on Tuplet
+# Notes for agents working on Omatuple
 
-Tuplet is an Omarchy bar widget for Tuple, the pair-programming app. It installs
+Omatuple is an Omarchy bar widget for Tuple, the pair-programming app. It installs
 Tuple's Linux client and drives it from a dropdown: rooms, people, and call
 controls. Many people run it on their own machines, so every change has to work
 on any Omarchy install, with any Tuple account.
@@ -121,8 +121,9 @@ which shadows Omarchy's in this harness. Quickshell itself is not affected.
 - Run both test suites; both must pass. GitHub Actions (`.github/workflows/tests.yml`)
   runs them on every PR, and `main` only accepts PRs whose Node and Panel checks pass.
 - Do not change the plugin id in `manifest.json` once the plugin is listed in the
-  marketplace, where ids are permanent. It changed once before listing, from
-  `io.github.gsottnick-eng.tuple`, when the GitHub account was renamed.
+  marketplace, where ids are permanent. It changed twice before listing:
+  from `io.github.gsottnick-eng.tuple` when the GitHub account was renamed, and
+  from `io.github.gsottnick.tuple` when the plugin was renamed Omatuple.
 - Bump `version` in `manifest.json` for any change users will receive.
 - Issues labelled `tuple-release` are opened by
   `.github/workflows/tuple-release-watch.yml` when Tuple ships a new Linux

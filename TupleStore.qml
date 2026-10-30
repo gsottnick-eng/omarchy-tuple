@@ -339,7 +339,7 @@ Singleton {
   // `omarchy agent crash` does: the facts here, the method in the skill file.
   function diagnose() {
     if (diagnoseProcess.running) return
-    var prompt = "Tuplet, the Tuple bar widget for Omarchy, is misbehaving and I want to know why.\n\n"
+    var prompt = "Omatuple, the Tuple bar widget for Omarchy, is misbehaving and I want to know why.\n\n"
       + "  status:     " + summary + "\n"
       + "  last error: " + (error || "none") + "\n"
       + "  tuple:      " + (binaryPath || "not found") + " " + version + "\n"
