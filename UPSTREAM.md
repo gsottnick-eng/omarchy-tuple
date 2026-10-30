@@ -78,12 +78,10 @@ hyprland-preview-share-picker 0.2.1, NVIDIA RTX 5080, two monitors, Arch Linux.
 
 ## Not reported: hyprwm/Hyprland
 
-Hyprland's bug templates forbid AI-written reports ("Please do **not** use AI to
-report bugs"). An agent-written discussion posted on 2026-10-29 (#16722) was closed
-by their moderation bot and earned the poster's account a strike. **Agents must
-never post to hyprwm/Hyprland.** A person who wants this reported should write it
-in their own words through the Bugs → Other discussion form; the facts below are
-for reference only, not to be pasted.
+Hyprland only accepts bug reports written by a person in their own words, so no
+agent should file this one. Whoever reports it should write it themselves through
+the Bugs → Other discussion form. The facts below are a reference, not text to
+paste.
 
 Title: **Xwayland is not restarted after it crashes; every later X11 client
 hangs on connect until re-login**
