@@ -5,16 +5,16 @@ each upstream follow the table. File links land here once reports are filed.
 
 | Problem | What the user sees | Who must fix it | Status | Tuplet's workaround |
 | --- | --- | --- | --- | --- |
-| Xwayland segfaults (null deref) when remote control starts on a shared screen | Every X11 app closes at once; the session and Wayland apps survive | X.org/Xwayland (freedesktop GitLab), and Tuple's Linux client for what it sends | draft below | none — Native Wayland apps are unaffected |
+| Xwayland segfaults (null deref) the moment Tuple starts a screen share | Every X11 app closes at once; the session and Wayland apps survive. Verified: both shares started on Hyprland on 2026-10-29 crashed Xwayland in the same second; it also crashed once with Tuple idle | X.org/Xwayland (freedesktop GitLab), and Tuple's Linux client for what it sends | draft below | none — Native Wayland apps are unaffected |
 | Hyprland never restarts Xwayland after it dies | After any Xwayland crash, every X11 app hangs on connect until you log out and back in; `hyprctl` toggling `xwayland.enabled` does not recover it | hyprwm/Hyprland | not reported: Hyprland only accepts reports written by a person (see below) | Tuplet refuses to share when a core dump says Xwayland died this session, and says why |
 | Tuple daemon blocks completely while the portal screen picker is open | Every `tuple` command and follow stream stalls until a screen is picked or the picker closes | Tuple | draft below | Tuplet closes the panel before sharing, explains the wait, and refuses other commands while the picker is up |
 | Tuple daemon hangs connecting to a dead Xwayland and never recovers | After an Xwayland crash the daemon must be killed; it never recovers on its own | Tuple | draft below | none |
-| The overlay's sharing border can't be thinner or rounded | A thick square border around the shared screen; no setting changes it | Tuple | draft below | none |
+| The overlay's sharing border can't be thinner or rounded | Square purple corner brackets, about 12 px thick on a 4K screen, drawn by Tuple's own `tuple-overlay` layer (verified 2026-10-29); no setting changes them | Tuple | draft below | none |
 | Annotation colors aren't per person like on macOS | Everyone draws in the same color, so you can't tell who drew what | Tuple | draft below | none |
-| GIFs and typed text from viewers don't render on the Linux host | Viewer annotations arrive as strokes only; GIF stamps and text boxes are missing | Tuple | draft below | none |
+| Viewer annotations don't render on the Linux host at all | Verified 2026-10-29 from a macOS viewer: pencil strokes, GIFs and text never appear on the sharer's screen, though the client logs the viewer switching to the pencil and the overlay layer exists | Tuple | draft below | none |
 | The viewer's red remote cursor overlaps their pencil | You can't see what the pencil points at while controlling | Tuple | draft below | none |
-| Remote control drives the host's real pointer instead of a separate one, and host movement steals it back | The person sharing fights their own pointer; moving the mouse hijacks control back | Tuple (may also need compositor support) | draft below | none |
-| The remote cursor is oversized and doesn't scale with resolution | A huge pointer on high-DPI screens | Tuple | draft below | none |
+| Remote control drives the host's real pointer instead of a separate one, and host movement steals it back | The person sharing fights their own pointer; moving the mouse hijacks control back. Verified 2026-10-29; the client injects input through Wayland (it kept working after Xwayland died), into the one system pointer | Tuple (may also need compositor support) | draft below | none |
+| The remote cursor is oversized and doesn't scale with resolution | A huge pointer on high-DPI screens | Tuple | not reproduced: the size looked fine in the 2026-10-29 test; reopen if it comes back | none |
 | No annotation toolbar for the person sharing | You can't pick tools or undo what viewers drew while sharing | Tuple | draft below | none |
 | `share` and `unshare` are deprecated with no replacement | Screen sharing hangs on deprecated verbs; a future client could drop them with nothing to take their place | Tuple | draft below | Tuplet hides Share if `tuple --help` stops listing the verbs |
 | The client records no "favorited at" time, so favorites can't sort by recency | Favorites can only sort alphabetically | Tuple | draft below | Tuplet sorts favorites A to Z |
@@ -38,9 +38,9 @@ hyprland-preview-share-picker 0.2.1, NVIDIA RTX 5080, two monitors, Arch Linux.
    closes.
 
 2. **The daemon hangs forever connecting to a dead Xwayland.**
-   What happened: Xwayland segfaulted. It kept listening on
-   `/tmp/.X11-unix/X0` but never accepted connections again, so every new X11
-   client hung on connect — and the Tuple daemon hung too, blocking
+   What happened: Xwayland segfaulted and Hyprland did not restart it. Hyprland
+   kept `/tmp/.X11-unix/X0` listening but nothing accepted connections, so every
+   new X11 client hung on connect — and the Tuple daemon hung too, blocking
    permanently. It had to be killed. Logging out and back in was the only
    recovery.
    Expected: the daemon should time out, report the failure, and recover.
@@ -48,24 +48,36 @@ hyprland-preview-share-picker 0.2.1, NVIDIA RTX 5080, two monitors, Arch Linux.
    command.
 
 3. **The overlay's sharing border can't be styled.** The full-screen annotation
-   layer (namespace `tuple-overlay`) draws a thick square border around the
-   shared screen. There is no setting for width, rounding, or color.
+   layer (namespace `tuple-overlay`) draws square purple corner brackets, about
+   12 px thick on a 4K screen. There is no setting for width, rounding, or color.
 
-4. **Annotation colors aren't per person.** On macOS Tuple picks a color per
-   viewer; the Linux host draws everyone in one color.
+4. **Viewer annotations don't render on the Linux host at all.** Verified on
+   2026-10-29 with a macOS viewer: pencil strokes, GIFs and text never appeared
+   on the sharer's screen. The client logs the viewer switching to the pencil
+   (`controls update cursor Mouse > Paint`), and the `tuple-overlay` layer is
+   created at full resolution, but nothing is drawn on it.
 
-5. **GIF stamps and typed text from viewers don't render on the host.** Only
-   freehand strokes arrive.
+5. **Annotation colors should be per person, as on macOS.** Can't be checked on
+   Linux until annotations render (item 4).
+
+5a. **Starting a share crashes Xwayland.** Both shares started on Hyprland on
+   2026-10-29 crashed Xwayland in the same second the client logged
+   `remoteinput: controlling output 'DP-1'` and created its overlay (Xwayland:
+   "Caught signal 11 (Segmentation fault). Server aborting"; recorded as
+   SIGABRT). Wayland-native remote control kept working afterwards, so whatever
+   the client does with X11 at share start looks like the trigger.
 
 6. **The viewer's red remote cursor overlaps their pencil**, so you can't tell
    what the pencil points at.
 
 7. **Remote control moves the host's real pointer** instead of driving a
    separate virtual pointer, and any pointer movement by the person sharing
-   takes control back mid-stroke. (May also need compositor support for a
-   separate pointer.)
+   takes control back mid-stroke. Verified 2026-10-29. Input goes through
+   Wayland (it kept working after Xwayland died). (May also need compositor
+   support for a separate pointer.)
 
 8. **The remote cursor is oversized** and doesn't scale with screen resolution.
+   Not reproduced on 2026-10-29 (the size looked fine); keep only if it returns.
 
 9. **No annotation toolbar for the person sharing** — no way to pick tools or
    undo while sharing.
