@@ -150,21 +150,37 @@ function parseRooms(raw) {
   toArray(list).forEach(function(r) {
     if (!r || !r.slug) return
     var personal = r.kind === "personal"
+    var occupants = toArray(r.members).map(function(m) {
+      return { id: m.id, name: text(m.full_name) || text(m.email), email: text(m.email) }
+    })
     out.push({
       slug: text(r.slug),
       name: text(r.name) || (personal ? "Your room" : text(r.slug)),
       url: text(r.http_value),
       personal: personal,
       favorite: r.favorited === true,
-      active: r.active_call === true
+      occupants: occupants,
+      // Occupancy is who is in the room now (members); active_call is not occupancy.
+      active: occupants.length > 0
     })
   })
   return out.sort(function(a, b) {
     if (a.personal !== b.personal) return a.personal ? -1 : 1
+    // Favorites stay A to Z whoever is in them; occupancy only orders the rest.
     if (a.favorite !== b.favorite) return a.favorite ? -1 : 1
-    if (a.active !== b.active) return a.active ? -1 : 1
+    if (!a.favorite && a.active !== b.active) return a.active ? -1 : 1
     return a.name.localeCompare(b.name)
   })
+}
+
+// Who is in a room, for the line under its name: "Ada Lovelace, Grace Hopper +2".
+// The signed-in user reads as "You". Empty string when nobody is there.
+function occupantsLabel(room, selfEmail) {
+  var names = toArray(room && room.occupants).map(function(o) {
+    return selfEmail && o.email === selfEmail ? "You" : o.name
+  })
+  if (names.length <= 3) return names.join(", ")
+  return names.slice(0, 3).join(", ") + " +" + (names.length - 3)
 }
 
 // Every room, already sorted; a search narrows it by name or slug.

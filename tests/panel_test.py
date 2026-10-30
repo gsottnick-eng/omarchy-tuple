@@ -77,6 +77,7 @@ class Harness:
         log = self.state / "argv"
         return log.read_text().splitlines() if log.exists() else []
 
+
     def cleanup(self):
         # The fake's follow loops end when they see `stopped`, so nothing outlives the test.
         (self.state / "stopped").touch()
@@ -144,6 +145,50 @@ class PanelTest(unittest.TestCase):
         self.assertEqual(state["user"]["name"], "Ada")
         self.assertIn("contacts follow --format json", harness.argv())
         self.assertIn("rooms follow --format json", harness.argv())
+
+    def test_rooms_report_occupants_and_active_means_occupied(self):
+        harness = self.harness(logged_in=True)
+        state = harness.run(["wait:200"])
+        rooms = state["panel"]["rooms"]
+        design = next(r for r in rooms if r["name"] == "Design Review")
+        self.assertEqual([o["name"] for o in design["occupants"]], ["Katherine Johnson", "Donald Knuth"])
+        self.assertTrue(design["active"])
+        incident = next(r for r in rooms if r["name"] == "Incident")
+        self.assertFalse(incident["active"], "active_call alone never makes a room occupied")
+
+    def test_room_occupancy_follows_what_the_client_pushes(self):
+        harness = self.harness(logged_in=True)
+        harness.run(["wait:200", "flag:busy", "wait:800", "unflag:busy", "wait:800"])
+
+        def pairing(snapshot):
+            return next(r for r in snapshot["panel"]["rooms"] if r["name"] == "Pairing")
+
+        self.assertEqual(pairing(harness.after(0))["occupants"], [], "the fixture starts with Pairing empty")
+        self.assertEqual([o["name"] for o in pairing(harness.after(1))["occupants"]], ["Grace Hopper"])
+        self.assertTrue(pairing(harness.after(1))["active"])
+        self.assertEqual(pairing(harness.after(3))["occupants"], [], "and empty again when she leaves")
+        self.assertFalse(pairing(harness.after(3))["active"])
+
+    def test_a_call_announces_when_someone_joins_or_leaves(self):
+        harness = self.harness(logged_in=True, in_call=True, flags=("muted",))
+        harness.run(["wait:200", "flag:guest", "wait:3500", "unflag:guest", "wait:3500"])
+
+        def alerts(snapshot):
+            return " ".join(" ".join(cmd) for cmd in snapshot["detached"])
+
+        joined, left = harness.after(2), harness.after(4)
+        self.assertIn("Grace Hopper joined the call", alerts(joined))
+        self.assertIn("Grace Hopper left the call", alerts(left))
+        self.assertNotIn("Katherine Johnson", alerts(harness.final))
+
+    def test_a_brief_disconnect_announces_nothing(self):
+        # A network blip flips `connected` away and back within the debounce
+        # window, so neither a leave nor a join is announced.
+        harness = self.harness(logged_in=True, in_call=True, flags=("muted",))
+        harness.run(["wait:200", "flag:guest", "wait:500", "unflag:guest", "wait:3500"])
+        alerts = " ".join(" ".join(cmd) for cmd in harness.final["detached"])
+        self.assertNotIn("Grace Hopper joined the call", alerts)
+        self.assertNotIn("Grace Hopper left the call", alerts)
 
     def test_calling_someone_uses_their_email_and_the_call_shows_up(self):
         harness = self.harness(logged_in=True)

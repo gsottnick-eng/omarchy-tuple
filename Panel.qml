@@ -704,15 +704,33 @@ Panel {
         font.pixelSize: Style.font.icon
       }
 
-      Text {
+      ColumnLayout {
         Layout.fillWidth: true
-        text: roomRow.room ? roomRow.room.name + (roomRow.room.active ? " · in use" : "") : ""
-        color: root.foreground
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.body
-        font.bold: roomRow.room && roomRow.room.active
-        textFormat: Text.PlainText
-        elide: Text.ElideRight
+        spacing: Style.space(1)
+
+        Text {
+          Layout.fillWidth: true
+          text: roomRow.room ? roomRow.room.name : ""
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+          font.bold: roomRow.room && roomRow.room.active
+          textFormat: Text.PlainText
+          elide: Text.ElideRight
+        }
+
+        // Always present so every row has the two-line height the list cap
+        // measures with; empty when nobody is in the room.
+        Text {
+          Layout.fillWidth: true
+          text: roomRow.room ? Model.occupantsLabel(roomRow.room, TupleStore.user ? TupleStore.user.email : "") : ""
+          opacity: text !== "" ? 1 : 0
+          color: root.dim
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          textFormat: Text.PlainText
+          elide: Text.ElideRight
+        }
       }
 
       PanelActionButton {

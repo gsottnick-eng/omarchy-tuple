@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.gsottnick.tuple",
   "name": "Tuplet",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "author": "Gavin Sottnick",
   "license": "MIT",
   "description": "Tuplet installs Tuple and runs pair programming from the Omarchy bar: rooms, people, and call controls in one dropdown.",

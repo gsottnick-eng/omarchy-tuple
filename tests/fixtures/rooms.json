@@ -64,6 +64,6 @@
     "favorited": false,
     "members": [],
     "kind": "team",
-    "active_call": true
+    "active_call": false
   }
 ]
