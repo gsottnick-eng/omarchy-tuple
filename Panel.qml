@@ -756,7 +756,7 @@ Panel {
       spacing: Style.space(8)
 
       Text {
-        text: roomRow.room && roomRow.room.personal ? "\u{f0004}" : "\u{f0567}"
+        text: roomRow.room && roomRow.room.personal ? "\u{f0004}" : "\u{f081c}"
         color: roomRow.room && roomRow.room.active ? root.accent : root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.icon
