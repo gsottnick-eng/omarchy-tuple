@@ -17,6 +17,9 @@ rooms, your people, and call controls, one click from the bar.
   and press Enter to join.
 - **Calls**: mute, share your screen, leave, and answer incoming calls. The bar
   icon shows when you're in a call and muted.
+- **Viewing others' screens**: when someone shares, Tuple opens its own viewer
+  window, with buttons to draw on their screen or take control. Tested with a
+  macOS sharer: both work.
 - **Install and update**: downloads the official client and checks it against
   Tuple's published checksum. Offers updates when Tuple releases one.
 - **Diagnose with my agent**: the bug button in the panel hands a problem to
@@ -149,9 +152,13 @@ list, who has to fix each one, and what we're waiting on. The big ones:
 - **Starting a screen share crashes Xwayland**, closing every X11 app you have
   open (Steam, Zoom, games). It happened every time in testing, the moment
   Tuple's client started the share. Hyprland does not restart Xwayland, so X11
-  apps hang until you log out and back in. Tuplet warns you once per session
-  before your first share, and refuses to share again after a crash until you
+  apps hang until you log out and back in. Tuplet warns you before each share
+  (you can turn that off), and refuses to share again after a crash until you
   log back in. Seen with Tuple v2026_10_23.0 and Xwayland 24.1.14.
+- **Viewing someone else's screen needs Xwayland.** Tuple's viewer window is an
+  X11 app. Viewing works, and doesn't crash anything, but after a share of
+  yours has crashed Xwayland, you can't view anyone's screen until you log out
+  and back in.
 - **Screen sharing needs the client's `capture` setting on `auto`**, Tuple's
   default. The `x11` setting fails under Hyprland with
   `X11GetImage failed with UnexpectedX11Event`. If you changed it, set it back:
