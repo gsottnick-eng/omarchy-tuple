@@ -575,7 +575,7 @@ Panel {
 
               Text {
                 width: parent.width
-                text: "Sharing will crash your open X11 apps (Steam, Zoom, games) and stop you from viewing others' screens until you log out and back in, which closes your open apps. This is a Tuple and Xwayland bug, not Omatuple."
+                text: "Sharing will crash your open X11 apps (Steam, Zoom, games) and stop you from viewing others' screens until you log out of your desktop and back in (signing out of Tuple doesn't help), which closes your open apps. This is a Tuple and Xwayland bug, not Omatuple."
                 color: root.urgent
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
@@ -783,8 +783,8 @@ Panel {
                     text: "Starting a screen share makes Xwayland crash. Xwayland is the part of your desktop that runs older X11 apps like Steam, Zoom and many games, and Tuple's own window for viewing other people's screens. "
                       + "This isn't Omatuple: it happens inside Tuple's Linux client and Xwayland, and Hyprland doesn't restart Xwayland afterwards. "
                       + "Tuple, X.org and Hyprland have to fix it.\n\n"
-                      + "After you share, X11 apps won't open and you can't view anyone's screen until you log out and back in, and logging out closes your open apps. "
-                      + "Until it's fixed: close X11 apps before sharing, and plan to log out and back in afterwards."
+                      + "After you share, X11 apps won't open and you can't view anyone's screen until you log out of your desktop and back in. Signing out of Tuple doesn't help, and logging out of the desktop closes your open apps. "
+                      + "Until it's fixed: close X11 apps before sharing, and plan to log out of your desktop and back in afterwards."
                     color: root.dim
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.bodySmall

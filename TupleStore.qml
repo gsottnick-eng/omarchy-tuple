@@ -706,7 +706,7 @@ Singleton {
         // Exit 0 with output lines naming Xwayland means it crashed this
         // session; anything else (missing coredumpctl, no dumps) never blocks.
         if (exitCode === 0 && Model.xwaylandDead(String(actionOut.text || ""))) {
-          root.fail("Xwayland stopped earlier in this session, so screen sharing would hang. Log out and back in, then share again.")
+          root.fail("Xwayland stopped earlier in this session, so screen sharing would hang. Log out of your desktop and back in, then share again.")
           return
         }
         root._share()
