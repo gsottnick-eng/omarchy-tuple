@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.gsottnick.omatuple",
   "name": "Omatuple",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "author": "Gavin Sottnick",
   "license": "MIT",
   "description": "Omatuple installs Tuple and runs pair programming from the Omarchy bar: rooms, people, and call controls in one dropdown.",
@@ -25,7 +25,11 @@
       "showRooms": true,
       "showPeople": true,
       "callAlerts": true,
-      "warnBeforeSharing": true
+      "warnBeforeSharing": true,
+      "soundParticipants": true,
+      "soundCall": true,
+      "soundMute": true,
+      "soundShare": true
     },
     "schema": [
       {
@@ -77,6 +81,30 @@
         "key": "callAlerts",
         "type": "boolean",
         "label": "Notify when a call starts or ends",
+        "defaultValue": true
+      },
+      {
+        "key": "soundParticipants",
+        "type": "boolean",
+        "label": "Sound when someone joins or leaves the call",
+        "defaultValue": true
+      },
+      {
+        "key": "soundCall",
+        "type": "boolean",
+        "label": "Sound when your call starts or ends",
+        "defaultValue": true
+      },
+      {
+        "key": "soundMute",
+        "type": "boolean",
+        "label": "Sound when you mute or unmute",
+        "defaultValue": true
+      },
+      {
+        "key": "soundShare",
+        "type": "boolean",
+        "label": "Sound when your screen share starts or stops",
         "defaultValue": true
       },
       {

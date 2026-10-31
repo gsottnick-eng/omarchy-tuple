@@ -23,6 +23,11 @@ Singleton {
 
   // Set by Panel from the widget's settings.
   property bool callAlerts: true
+  // Call sounds, one switch each; the panel sets them from its settings.
+  property bool soundParticipants: true
+  property bool soundCall: true
+  property bool soundMute: true
+  property bool soundShare: true
 
   // --------------------------------------------------------------- client
   property bool probed: false
@@ -139,6 +144,9 @@ Singleton {
     var s = Model.parseState(line)
     if (!s) return
     var wasInCall = inCall
+    var wasMuted = muted
+    // The first snapshot only says where things stand; nothing in it is news.
+    var heard = stateSeen
     // Lines that arrive within a second of Share are echoes of the start;
     // only a later snapshot means the daemon answers again, i.e. the picker
     // closed — picked or cancelled.
@@ -176,6 +184,8 @@ Singleton {
       pickerPending = false
       pickerTimer.stop()
     }
+    callSounds(heard, wasInCall, wasMuted, s)
+    stateSeen = true
     if (loggedIn && loggingIn) {
       loggingIn = false
       loginUrl = ""
@@ -350,6 +360,38 @@ Singleton {
     note("Copied")
   }
 
+  // ----------------------------------------------------------------- sounds
+
+  property bool stateSeen: false
+  // The call has connected at least once, so its end is worth a sound.
+  property bool _callConnected: false
+
+  function callSounds(heard, wasInCall, wasMuted, s) {
+    if (s.inCall && s.connected && !_callConnected) {
+      _callConnected = true
+      if (heard && soundCall) play("call-start")
+    }
+    if (wasInCall && !s.inCall) {
+      if (heard && soundCall && _callConnected) play("call-end")
+      _callConnected = false
+    }
+    if (heard && soundMute && wasInCall && s.inCall && s.muted !== wasMuted) play(s.muted ? "mute" : "unmute")
+  }
+
+  // Bundled sounds through PipeWire's pw-play, one after another. Only the
+  // sound's name reaches the command line.
+  property var _sounds: []
+  function play(name) {
+    if (_sounds.length >= 3) return
+    _sounds.push(name)
+    if (!player.running) _playNext()
+  }
+  function _playNext() {
+    if (_sounds.length === 0) return
+    player.command = ["pw-play", "--volume", "0.6", pluginDir + "/sounds/" + _sounds.shift() + ".wav"]
+    player.running = true
+  }
+
   // Alerts name the people in a call, so they reach the notifier on stdin too.
   property var _alerts: []
   function alert(icon, summary, body) {
@@ -501,13 +543,15 @@ Singleton {
       root.announcedParticipants.forEach(function(p) { announced[p.id] = true })
       var now = {}
       pending.forEach(function(p) { now[p.id] = true })
+      var joined = pending.filter(function(p) { return !announced[p.id] })
+      var left = root.announcedParticipants.filter(function(p) { return !now[p.id] })
       if (root.callAlerts && root.probed) {
-        pending.forEach(function(p) {
-          if (!announced[p.id]) root.alert("call-start", p.name + " joined the call")
-        })
-        root.announcedParticipants.forEach(function(p) {
-          if (!now[p.id]) root.alert("call-stop", p.name + " left the call")
-        })
+        joined.forEach(function(p) { root.alert("call-start", p.name + " joined the call") })
+        left.forEach(function(p) { root.alert("call-stop", p.name + " left the call") })
+      }
+      if (root.soundParticipants && root.probed) {
+        if (joined.length > 0) root.play("joined")
+        if (left.length > 0) root.play("left")
       }
       root.announcedParticipants = pending
     }
@@ -529,10 +573,16 @@ Singleton {
   }
 
   // Sharing started: the picker is resolved, other commands can run again.
-  onSharingChanged: if (sharing && pickerPending) {
-    pickerPending = false
-    pickerTimer.stop()
-    status = ""
+  // A share already running when the shell starts makes no sound.
+  onSharingChanged: {
+    if (sharing && pickerPending) {
+      pickerPending = false
+      pickerTimer.stop()
+      status = ""
+      if (soundShare) play("share-start")
+    } else if (!sharing && inCall && soundShare) {
+      play("share-stop")
+    }
   }
 
   onLoggedInChanged: if (loggedIn) startStreams()
@@ -761,6 +811,11 @@ Singleton {
     }
     // Copied again while wl-copy was still reading: copy the newer value.
     onExited: if (root._clip !== "") { stdinEnabled = true; running = true }
+  }
+
+  Process {
+    id: player
+    onExited: root._playNext()
   }
 
   Process {

@@ -145,6 +145,11 @@ def alerts(snapshot):
     )
 
 
+def sounds(snapshot):
+    """The names of the sounds played, in order."""
+    return [Path(p["command"][-1]).stem for p in snapshot["piped"] if p["command"][0] == "pw-play"]
+
+
 def command_lines(snapshot):
     """Every command line the plugin ran or detached, as one string."""
     commands = snapshot["detached"] + [p["command"] for p in snapshot["piped"]]
@@ -271,6 +276,35 @@ class PanelTest(unittest.TestCase):
         self.assertNotIn("Katherine Johnson", alerts(harness.final))
         # Names reach the notifier on stdin, never on a command line.
         self.assertNotIn("Grace Hopper", command_lines(harness.final))
+
+    def test_call_sounds_follow_what_happens_in_the_call(self):
+        # Already in a call when the shell starts: that alone plays nothing.
+        # Muted throughout the guest's visit, as the guest fixture is.
+        harness = self.harness(logged_in=True, in_call=True, flags=("muted",))
+        harness.run(["wait:300", "flag:guest", "wait:3500", "unflag:guest", "wait:3500",
+                     "mute", "wait:800", "mute", "wait:800", "leave", "wait:1000"])
+        self.assertEqual(sounds(harness.after(0)), [], "nothing is news in the first snapshot")
+        self.assertEqual(sounds(harness.final), ["joined", "left", "unmute", "mute", "call-end"])
+        for played in (p for p in harness.final["piped"] if p["command"][0] == "pw-play"):
+            self.assertEqual(played["command"][:3], ["pw-play", "--volume", "0.6"])
+            self.assertTrue(Path(played["command"][-1]).is_file(), "a bundled sound")
+
+    def test_starting_a_call_plays_once_it_connects(self):
+        harness = self.harness(logged_in=True)
+        harness.run(["call:Grace Hopper", "wait:1500"])
+        self.assertEqual(sounds(harness.final), ["call-start"])
+
+    def test_sharing_plays_on_start_and_stop(self):
+        harness = self.harness(logged_in=True, in_call=True)
+        harness.run(["wait:300", "share", "wait:2500", "share", "wait:2500"])
+        self.assertEqual(sounds(harness.final), ["share-start", "share-stop"])
+
+    def test_each_sound_can_be_turned_off_and_tested(self):
+        harness = self.harness(logged_in=True, in_call=True)
+        harness.run(["wait:300", "mute", "wait:800", "open", "wait:300", "settings", "wait:300",
+                     "click:soundTest", "wait:300"],
+                    settings={"soundMute": False})
+        self.assertEqual(sounds(harness.final), ["joined"], "muting is silent; the test button plays")
 
     def test_a_brief_disconnect_announces_nothing(self):
         # A network blip flips `connected` away and back within the debounce

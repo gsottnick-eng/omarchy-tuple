@@ -20,6 +20,7 @@ Diagnosing a user's problem? Start with `agents/diagnose/SKILL.md`.
 | `bin/tuple-install` | Downloads Tuple, verifies its SHA-256, installs it |
 | `bin/tuple-notify` | Shows call alerts, read from stdin, over D-Bus |
 | `agents/diagnose/SKILL.md` | How a user's agent diagnoses and reports problems |
+| `sounds/` | The call sounds, written by `tools/make-sounds.py`; never edit them by hand |
 | `tools/preview/` | Rebuilds `preview.png`, the marketplace and README picture, from the fake client |
 
 ## Rules every change keeps
@@ -53,8 +54,9 @@ Diagnosing a user's problem? Start with `agents/diagnose/SKILL.md`.
    included. Stop closes the streams before stopping the daemon, and nothing
    restarts them until Start.
 7. **No dependencies beyond a stock Omarchy:** the `tuple` binary at run time,
-   `curl` and `sha256sum` to install, `wl-copy` to copy a link, and the system
-   Python with python-gobject (in Omarchy's base packages) for call alerts.
+   `curl` and `sha256sum` to install, `wl-copy` to copy a link, the system
+   Python with python-gobject (in Omarchy's base packages) for call alerts,
+   and PipeWire's `pw-play` for call sounds.
 8. **User-controlled text renders as plain text.** Contact and room names are
    chosen by other people; every `Text` showing them sets
    `textFormat: Text.PlainText`.

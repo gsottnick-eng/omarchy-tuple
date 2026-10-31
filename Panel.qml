@@ -56,8 +56,16 @@ Panel {
     sharing: TupleStore.sharing, participants: TupleStore.participants
   })
 
-  onSettingsChanged: TupleStore.callAlerts = Model.toBool(setting("callAlerts", true), true)
-  Component.onCompleted: TupleStore.callAlerts = Model.toBool(setting("callAlerts", true), true)
+  // Alerts and sounds belong to the one store, set from this widget's settings.
+  function syncStore(): void {
+    TupleStore.callAlerts = Model.toBool(setting("callAlerts", true), true)
+    TupleStore.soundParticipants = Model.toBool(setting("soundParticipants", true), true)
+    TupleStore.soundCall = Model.toBool(setting("soundCall", true), true)
+    TupleStore.soundMute = Model.toBool(setting("soundMute", true), true)
+    TupleStore.soundShare = Model.toBool(setting("soundShare", true), true)
+  }
+  onSettingsChanged: syncStore()
+  Component.onCompleted: syncStore()
 
   // ------------------------------------------------------------- keyboard
 
@@ -849,6 +857,47 @@ Panel {
                     checked: TupleStore.callAlerts
                     onClicked: root.persistSettings({ callAlerts: !TupleStore.callAlerts })
                   }
+
+                  PanelSectionHeader { text: "SOUNDS"; foreground: root.foreground; fontFamily: root.fontFamily }
+
+                  SettingToggle {
+                    objectName: "soundParticipantsToggle"
+                    label: "Someone joins or leaves"
+                    checked: TupleStore.soundParticipants
+                    onClicked: root.persistSettings({ soundParticipants: !TupleStore.soundParticipants })
+                  }
+
+                  SettingToggle {
+                    objectName: "soundCallToggle"
+                    label: "Your call starts or ends"
+                    checked: TupleStore.soundCall
+                    onClicked: root.persistSettings({ soundCall: !TupleStore.soundCall })
+                  }
+
+                  SettingToggle {
+                    objectName: "soundMuteToggle"
+                    label: "Mute and unmute"
+                    checked: TupleStore.soundMute
+                    onClicked: root.persistSettings({ soundMute: !TupleStore.soundMute })
+                  }
+
+                  SettingToggle {
+                    objectName: "soundShareToggle"
+                    label: "Screen share starts or stops"
+                    checked: TupleStore.soundShare
+                    onClicked: root.persistSettings({ soundShare: !TupleStore.soundShare })
+                  }
+
+                  Button {
+                    objectName: "soundTest"
+                    text: "Play a test sound"
+                    bordered: true
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    onClicked: TupleStore.play("joined")
+                  }
+
+                  PanelSectionHeader { text: "WARNINGS"; foreground: root.foreground; fontFamily: root.fontFamily }
 
                   // XWAYLAND-SHARE-WORKAROUND: the warning's setting.
                   SettingToggle {
