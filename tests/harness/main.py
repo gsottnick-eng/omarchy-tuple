@@ -98,7 +98,7 @@ STORE_PROPS = (
     "installMessage",
     "summary",
 )
-PANEL_PROPS = ("opened", "ready", "ringing", "search", "focusSection", "barText", "shareWarningOpen", "page")
+PANEL_PROPS = ("opened", "ready", "ringing", "search", "focusSection", "barText", "shareWarningOpen", "page", "barStyle", "accentRole")
 
 
 def read(obj: QObject, name: str, default=None):
@@ -122,6 +122,10 @@ def snapshot(plugin: QObject, store: QObject) -> dict:
     for name in ("roomsSection", "peopleSection"):
         item = plugin.findChild(QObject, name)
         state["panel"][name] = bool(item and item.property("visible"))
+    page = plugin.findChild(QObject, "settingsPage")
+    state["panel"]["settingsPage"] = bool(page and page.property("visible"))
+    keyboard = plugin.findChild(QObject, "keyboardPanel")
+    state["panel"]["contentHeight"] = read(keyboard, "contentHeight") if keyboard else None
     view = plugin.findChild(QObject, "pageView")
     state["panel"]["pageView"] = {
         key: read(view, key) for key in ("visible", "height", "contentHeight", "contentY")
@@ -171,7 +175,8 @@ def apply_step(step: str, plugin: QObject, store: QObject, harness=None):
     }
     panel_calls = {"share-panel": "shareFromPanel()", "share-anyway": "shareAnyway()",
                    "share-dont-warn": "shareAndStopWarning()", "share-help": "togglePage('help')",
-                   "back": "back()", "page-end": "scrollPage(1000)"}
+                   "back": "back()", "page-end": "scrollPage(1000)",
+                   "settings": "togglePage('settings')"}
     if name in panel_calls:
         # QML functions on the panel aren't invokable from Python attributes or
         # the metaobject; evaluate in the panel's own QML context.
@@ -204,6 +209,14 @@ def apply_step(step: str, plugin: QObject, store: QObject, harness=None):
         Path(os.environ["FAKE_TUPLE_STATE"], argument).touch()
     elif name == "unflag":
         (Path(os.environ["FAKE_TUPLE_STATE"]) / argument).unlink(missing_ok=True)
+    elif name == "click":
+        # A settings control, as if clicked: its own signal, so its wiring runs.
+        QMetaObject.invokeMethod(plugin.findChild(QObject, argument), "clicked")
+    elif name == "pick":
+        control, _, value = argument.partition("=")
+        QMetaObject.invokeMethod(
+            plugin.findChild(QObject, control + "Group"), "changed", Q_ARG("QString", value)
+        )
     elif name == "wait":
         pass
     else:

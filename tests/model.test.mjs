@@ -264,3 +264,30 @@ test("a pasted link joins by slug for /c/ links and whole otherwise, like the cl
   assert.equal(Model.joinTarget("https://tuple.app/r/abc123"), "https://tuple.app/r/abc123")
   assert.equal(Model.joinTarget("https://example.com/some/path"), "https://example.com/some/path")
 })
+
+test("the bar style falls back to the old showLabel setting", () => {
+  assert.equal(Model.barStyle({}), "icon")
+  assert.equal(Model.barStyle({ showLabel: "true" }), "status")
+  assert.equal(Model.barStyle({ showLabel: true, barStyle: "who" }), "who")
+  assert.equal(Model.barStyle({ barStyle: "sparkles", showLabel: false }), "icon")
+})
+
+test("the bar text follows the chosen style", () => {
+  const call = { loggedIn: true, inCall: true, muted: false, sharing: false,
+    participants: [{ name: "Grace Hopper" }, { name: "Alan Turing" }] }
+  assert.equal(Model.barText("icon", call), "")
+  assert.equal(Model.barText("status", call), "In call")
+  assert.equal(Model.barText("status", { ...call, muted: true }), "Muted")
+  assert.equal(Model.barText("status", { ...call, muted: true, sharing: true }), "Sharing")
+  assert.equal(Model.barText("who", call), "Grace, Alan")
+  assert.equal(Model.barText("who", { ...call, participants: [] }), "In call")
+  assert.equal(Model.barText("status", { loggedIn: true, inCall: false }), "")
+  assert.equal(Model.barText("who", { loggedIn: false, inCall: false }), "Tuple")
+})
+
+test("panel sizes", () => {
+  assert.deepEqual(Model.panelMetrics("normal"), { width: 380, height: 620 })
+  assert.deepEqual(Model.panelMetrics(undefined), { width: 380, height: 620 })
+  assert.ok(Model.panelMetrics("compact").height < 620)
+  assert.ok(Model.panelMetrics("tall").height > 620)
+})

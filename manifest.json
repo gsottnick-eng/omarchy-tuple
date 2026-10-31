@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.gsottnick.omatuple",
   "name": "Omatuple",
-  "version": "2.4.4",
+  "version": "2.5.0",
   "author": "Gavin Sottnick",
   "license": "MIT",
   "description": "Omatuple installs Tuple and runs pair programming from the Omarchy bar: rooms, people, and call controls in one dropdown.",
@@ -19,16 +19,59 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "showLabel": false,
+      "barStyle": "icon",
+      "panelSize": "normal",
+      "accent": "theme",
+      "showRooms": true,
+      "showPeople": true,
       "callAlerts": true,
       "warnBeforeSharing": true
     },
     "schema": [
       {
-        "key": "showLabel",
+        "key": "barStyle",
+        "type": "enum",
+        "label": "Next to the bar icon: nothing, call status, or who you're in a call with",
+        "options": [
+          "icon",
+          "status",
+          "who"
+        ],
+        "defaultValue": "icon"
+      },
+      {
+        "key": "panelSize",
+        "type": "enum",
+        "label": "Panel size",
+        "options": [
+          "compact",
+          "normal",
+          "tall"
+        ],
+        "defaultValue": "normal"
+      },
+      {
+        "key": "accent",
+        "type": "enum",
+        "label": "Highlight colour, from the theme",
+        "options": [
+          "theme",
+          "foreground",
+          "urgent"
+        ],
+        "defaultValue": "theme"
+      },
+      {
+        "key": "showRooms",
         "type": "boolean",
-        "label": "Show status text next to the bar icon",
-        "defaultValue": false
+        "label": "Show rooms",
+        "defaultValue": true
+      },
+      {
+        "key": "showPeople",
+        "type": "boolean",
+        "label": "Show people",
+        "defaultValue": true
       },
       {
         "key": "callAlerts",
