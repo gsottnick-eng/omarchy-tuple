@@ -98,7 +98,7 @@ STORE_PROPS = (
     "installMessage",
     "summary",
 )
-PANEL_PROPS = ("opened", "ready", "ringing", "search", "focusSection", "barText", "shareWarningOpen", "shareHelpOpen")
+PANEL_PROPS = ("opened", "ready", "ringing", "search", "focusSection", "barText", "shareWarningOpen", "page")
 
 
 def read(obj: QObject, name: str, default=None):
@@ -119,6 +119,13 @@ def snapshot(plugin: QObject, store: QObject) -> dict:
     state["panel"]["rooms"] = read(plugin, "rooms", [])
     state["panel"]["people"] = read(plugin, "people", [])
     state["panel"]["settings"] = read(plugin, "settings", {})
+    for name in ("roomsSection", "peopleSection"):
+        item = plugin.findChild(QObject, name)
+        state["panel"][name] = bool(item and item.property("visible"))
+    view = plugin.findChild(QObject, "pageView")
+    state["panel"]["pageView"] = {
+        key: read(view, key) for key in ("visible", "height", "contentHeight", "contentY")
+    } if view else None
     bar = plugin.property("bar")
     state["barWrites"] = read(bar, "writes", []) if bar is not None else []
     state["detached"] = core.DETACHED
@@ -163,7 +170,8 @@ def apply_step(step: str, plugin: QObject, store: QObject, harness=None):
         "diagnose": (store, "diagnose"),
     }
     panel_calls = {"share-panel": "shareFromPanel()", "share-anyway": "shareAnyway()",
-                   "share-dont-warn": "shareAndStopWarning()", "share-help": "toggleShareHelp()"}
+                   "share-dont-warn": "shareAndStopWarning()", "share-help": "togglePage('help')",
+                   "back": "back()", "page-end": "scrollPage(1000)"}
     if name in panel_calls:
         # QML functions on the panel aren't invokable from Python attributes or
         # the metaobject; evaluate in the panel's own QML context.

@@ -77,7 +77,7 @@ class Harness:
             PATH=f"{FAKE_CLIENT_DIR}:{path}" if installed else path,
         )
 
-    def run(self, steps=(), settle=1500, step_delay=700, settings=None):
+    def run(self, steps=(), settle=1500, step_delay=700, settings=None, font_size=12):
         dumps = self.workdir / "dumps"
         final = self.workdir / "final.json"
         command = [
@@ -95,6 +95,8 @@ class Harness:
             str(step_delay),
             "--theme",
             "tokyo-night",
+            "--font-size",
+            str(font_size),
             "--settings",
             json.dumps(settings or {}),
             "--do",
@@ -462,10 +464,25 @@ class PanelTest(unittest.TestCase):
         self.assertFalse(state["panel"]["shareWarningOpen"])
 
     def test_the_help_button_explains_why_sharing_breaks_the_desktop(self):
-        harness = self.harness(logged_in=True)
-        harness.run(["wait:300", "share-help", "wait:300", "share-help", "wait:300"])
-        self.assertTrue(harness.after(1)["panel"]["shareHelpOpen"])
-        self.assertFalse(harness.final["panel"]["shareHelpOpen"])
+        # In a call, on a short screen at a large font, the help is taller than the space left.
+        harness = self.harness(logged_in=True, in_call=True)
+        harness.env["HARNESS_SCREEN"] = "1600x700"
+        harness.run(["open", "wait:300", "share-help", "wait:300", "page-end", "wait:300",
+                     "back", "wait:300", "back", "wait:300"], font_size=20)
+        help_open = harness.after(2)["panel"]
+        self.assertEqual(help_open["page"], "help")
+        self.assertFalse(help_open["roomsSection"], "help replaces the lists instead of squeezing under them")
+        self.assertFalse(help_open["peopleSection"])
+        view = harness.after(4)["panel"]["pageView"]
+        self.assertTrue(view["visible"])
+        self.assertGreater(view["height"], 0)
+        self.assertGreater(view["contentHeight"], view["height"], "this run must need scrolling")
+        self.assertEqual(view["contentY"], max(0, view["contentHeight"] - view["height"]),
+                         "the end of the help text can be scrolled to")
+        self.assertEqual(harness.after(6)["panel"]["page"], "")
+        self.assertTrue(harness.after(6)["panel"]["opened"], "Esc leaves help without closing the panel")
+        self.assertTrue(harness.after(6)["panel"]["roomsSection"])
+        self.assertFalse(harness.final["panel"]["opened"], "a second Esc closes the panel")
 
     def test_the_panel_closes_before_the_share_picker_opens(self):
         harness = self.harness(logged_in=True, in_call=True)
