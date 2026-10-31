@@ -259,8 +259,8 @@ function parseHttpResponse(raw) {
 }
 
 function apiError(reply) {
+  if (reply && reply.body && typeof reply.body.error === "string") return elide(reply.body.error)
   if (!reply || reply.status === 0) return "Couldn't reach Tuple. Is it running?"
-  if (reply.body && typeof reply.body.error === "string") return elide(reply.body.error)
   return "Tuple refused the request (" + reply.status + ")"
 }
 

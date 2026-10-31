@@ -375,13 +375,16 @@ class PanelTest(unittest.TestCase):
         # picker_holds: the fake client leaves the picker open, the way the
         # real daemon blocks until a screen is chosen.
         harness = self.harness(logged_in=True, in_call=True, flags=("picker_holds",))
-        harness.run(["wait:300", "share", "wait:800", "mute", "wait:500"])
+        harness.run(["wait:300", "share", "wait:800", "mute", "wait:500",
+                     "favorite:Grace Hopper", "favorite-room:room-15", "join:room-16", "wait:300"])
         held = harness.after(2)
         self.assertIn("share", harness.argv())
         self.assertTrue(held["status"].startswith("Choose a screen to share"))
         self.assertTrue(held["pickerPending"])
         # The daemon is blocked on the picker, so a mute must not run.
         self.assertNotIn("call mute", harness.argv())
+        # Nor do favorites or joins, which would wait unanswered on its socket.
+        self.assertEqual(harness.socket_requests(), [])
         self.assertIn("Tuple is waiting for the share picker", harness.final["status"],
                       "refused commands say why")
         # Leaving always works, picker or not.

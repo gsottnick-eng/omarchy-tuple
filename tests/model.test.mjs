@@ -245,6 +245,7 @@ test("daemon API answers parse to a status and body", () => {
   assert.equal(Model.apiError({ status: 0, body: null }), "Couldn't reach Tuple. Is it running?")
   assert.equal(Model.apiError({ status: 409, body: { error: "declined" } }), "declined")
   assert.equal(Model.apiError({ status: 500, body: null }), "Tuple refused the request (500)")
+  assert.equal(Model.apiError({ status: 0, body: { error: "Tuple didn't answer." } }), "Tuple didn't answer.")
 })
 
 test("calls follow the client's own rules before reaching the daemon", () => {

@@ -263,14 +263,15 @@ Singleton {
   // the daemon's API on its socket, never on a `tuple` command line (Model.js,
   // "daemon API"). The state stream shows what happened next.
   function callPerson(person) {
-    if (!person || !installed || calling !== "") return
-    if (pickerPending) { note("Tuple is waiting for the share picker…"); return }
+    if (!person || calling !== "" || !_apiReady()) return
     var call = Model.callRequest(person)
     if (call.error) { fail(call.error); return }
     calling = person.name
     progress("Calling " + person.name + "…")
     callTimer.restart()
     api("POST", call.path, call.body, function(reply) {
+      // Answered, left, or given up on already: a late answer adds nothing.
+      if (root.calling === "") return
       if (root._settled(reply)) return
       root.calling = ""
       callTimer.stop()
@@ -292,19 +293,20 @@ Singleton {
   }
 
   function join(target, label) {
-    if (pickerPending) { note("Tuple is waiting for the share picker…"); return }
+    if (!_apiReady()) return
     progress(label)
     api("POST", "/call/join", { url: target }, _settled)
   }
 
   function favoritePerson(person) {
-    if (!person || !/^\d+$/.test(String(person.id))) return
+    if (!person || !_apiReady()) return
+    if (!/^\d+$/.test(String(person.id))) { fail("Tuple didn't give this person an id."); return }
     api(person.favorite ? "DELETE" : "POST", "/contacts/" + person.id + "/favorite", null, _settled)
   }
 
   // The rooms stream has no room ids; the room's own record does.
   function favoriteRoom(room) {
-    if (!room) return
+    if (!room || !_apiReady()) return
     api("GET", "/rooms/" + encodeURIComponent(room.slug), null, function(reply) {
       var id = reply.body && reply.body.id ? String(reply.body.id) : ""
       if (!root._settled(reply)) return
@@ -319,6 +321,13 @@ Singleton {
     apiRequest.createObject(root, {
       path: runtime + "/tuple-0", request: Model.httpRequest(method, path, body), done: done
     })
+  }
+
+  // While the share picker is open the daemon answers nothing (see AGENTS.md).
+  function _apiReady() {
+    if (!installed) return false
+    if (pickerPending) { note("Tuple is waiting for the share picker…"); return false }
+    return true
   }
 
   // Reports a failed request; true when it succeeded.
@@ -679,6 +688,13 @@ Singleton {
       property bool finished: false
       // Unsplit: an answer's body has no trailing newline.
       parser: SplitParser { splitMarker: ""; onRead: function(data) { apiSocket.reply += data } }
+      // A daemon that accepts and never answers (a dead Xwayland can do that)
+      // still ends the request.
+      property Timer deadline: Timer {
+        interval: 60000
+        running: true
+        onTriggered: apiSocket.finish(true)
+      }
       onConnectedChanged: {
         if (connected) {
           opened = true
@@ -691,10 +707,11 @@ Singleton {
       // The daemon closing after its answer is an error too, and can come before
       // the answer is read: once connected, the disconnect finishes the request.
       onError: if (!opened) finish()
-      function finish() {
+      function finish(timedOut) {
         if (finished) return
         finished = true
-        done(Model.parseHttpResponse(reply))
+        deadline.stop()
+        done(timedOut ? { status: 0, body: { error: "Tuple didn't answer." } } : Model.parseHttpResponse(reply))
         // Later: a refused connection finishes while the object is still being built.
         Qt.callLater(apiSocket.destroy)
       }
