@@ -132,6 +132,7 @@ once.
 | Highlight colour | `accent` | `theme` | Your theme's accent, its text colour (`foreground`) or its alert colour (`urgent`) |
 | Show rooms / people | `showRooms`, `showPeople` | on | Hide a list you don't use |
 | Call notifications | `callAlerts` | on | A desktop notification when a call starts or ends, or someone joins or leaves |
+| Sounds | `soundParticipants`, `soundCall`, `soundMute`, `soundShare` | on | A short, quiet sound when someone joins or leaves, your call starts or ends, you mute or unmute, or your screen share starts or stops. Settings has a button to hear one |
 | Warn before sharing | `warnBeforeSharing` | on | Ask before a share, which crashes X11 apps (see Known issues) |
 
 From the command line:

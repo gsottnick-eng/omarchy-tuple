@@ -2,7 +2,7 @@
 
 import os
 
-from PySide6.QtCore import Property, QObject, QProcess, Signal, Slot
+from PySide6.QtCore import Property, QObject, QProcess, QTimer, Signal, Slot
 from PySide6.QtNetwork import QLocalSocket
 from PySide6.QtQml import QmlElement
 
@@ -92,6 +92,8 @@ class SplitParser(QObject):
 # Commands that read their input on stdin, recorded with that input instead of
 # run; tests assert on these.
 PIPED_COMMANDS = {"wl-copy", "tuple-notify"}
+# Recorded the same way and finished at once: tests must not play sounds.
+SILENT_COMMANDS = {"pw-play"}
 PIPED = []
 
 
@@ -190,12 +192,14 @@ class Process(QObject):
             return
         self._running = True
         self.runningChanged.emit()
-        if os.path.basename(self._command[0]) in PIPED_COMMANDS:
+        if os.path.basename(self._command[0]) in PIPED_COMMANDS | SILENT_COMMANDS:
             # Recorded, never run: tests must not raise real notifications or
             # write the developer's clipboard.
             self._piped = {"command": list(self._command), "stdin": ""}
             PIPED.append(self._piped)
             self.started.emit()
+            if os.path.basename(self._command[0]) in SILENT_COMMANDS:
+                QTimer.singleShot(0, lambda: self._finalize(0, 0))
             return
         # Each run starts from an empty buffer, as the real collector does.
         for stream in (self._stdout, self._stderr):
