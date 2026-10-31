@@ -68,6 +68,10 @@ Also `share`, `accept`, `join <link>`, `status`, `open`, `close`, and `diagnose`
 
 ## Install
 
+Omatuple is listed in the
+[Omarchy plugin marketplace](https://plugins.omarchy.org/plugin.html?id=io.github.gsottnick.omatuple).
+Install it from there, or from the terminal:
+
 ```bash
 omarchy plugin add https://github.com/gsottnick/omatuple.git --enable
 ```
