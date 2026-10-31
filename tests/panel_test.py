@@ -346,7 +346,7 @@ class PanelTest(unittest.TestCase):
         self.assertTrue(state["inCall"])
         self.assertFalse(state["connected"])
         self.assertFalse(state["panel"]["ringing"], "an outgoing call is never incoming")
-        self.assertEqual(state["summary"], "Ringing")
+        self.assertEqual(state["summary"], "Calling")
 
     def test_an_incoming_call_rings_until_it_connects(self):
         harness = self.harness(logged_in=True, in_call=True, flags=("ringing", "muted"))

@@ -67,10 +67,15 @@ Singleton {
   property string installMessage: ""
 
   readonly property bool busy: actionProcess.running || calling !== "" || installProcess.running
+  // "calling" while ours rings out, "ringing" for a call to answer, else "".
+  readonly property string callPhase: Model.callPhase({
+    inCall: inCall, connected: connected, connectedOnce: connectedOnce,
+    participants: participants, outgoing: outgoing
+  })
   readonly property string summary: Model.statusSummary({
     installed: installed, daemonRunning: daemonRunning, loggedIn: loggedIn,
     inCall: inCall, muted: muted, sharing: sharing, connected: connected,
-    connectedOnce: connectedOnce
+    connectedOnce: connectedOnce, participants: participants, outgoing: outgoing
   })
   readonly property string pluginDir: {
     var dir = String(Qt.resolvedUrl("."))
@@ -171,7 +176,9 @@ Singleton {
     version = s.version
     updateVersion = s.updateVersion
     inCall = s.inCall
-    if (!s.inCall || s.connected) outgoing = false
+    // Only a connection or the end of the call settles our ring out; an idle
+    // snapshot before the daemon reports the new call must not.
+    if (s.connected || (wasInCall && !s.inCall)) outgoing = false
     // Mid-call, tell the room who came and went — but only once the change
     // has held long enough not to be a network blip (see participantDebounce).
     // The call's own start and end are announced by onInCallChanged.
@@ -314,6 +321,7 @@ Singleton {
   function join(target, label) {
     if (!_apiReady()) return
     outgoing = true
+    callTimer.restart()
     progress(label)
     api("POST", "/call/join", { url: target }, function(reply) {
       if (!root._settled(reply)) root.outgoing = false
@@ -787,9 +795,13 @@ Singleton {
   Timer {
     id: callTimer
     interval: 60000
-    onTriggered: if (root.calling !== "" && !root.inCall) {
-      root.note(root.calling + " didn't pick up")
-      root.calling = ""
+    onTriggered: {
+      // Nothing came of the call or join, so a later ring is someone else's.
+      if (!root.inCall) root.outgoing = false
+      if (root.calling !== "" && !root.inCall) {
+        root.note(root.calling + " didn't pick up")
+        root.calling = ""
+      }
     }
   }
 

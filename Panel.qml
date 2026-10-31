@@ -36,13 +36,13 @@ Panel {
   readonly property color selectedFill: Style.selectedFillFor(foreground, accent)
 
   readonly property bool ready: TupleStore.installed && TupleStore.loggedIn
-  // Unverified against a real incoming call: a call this side did not start
-  // that has not connected yet is treated as ringing. A call the store is
-  // still dialling itself (outgoing) never counts as incoming, and neither
-  // does a connected call whose connection state blips. A call placed before
-  // the shell started is indistinguishable from an incoming one: the client
-  // says nothing about who placed it.
-  readonly property bool ringing: TupleStore.inCall && !TupleStore.connected && TupleStore.calling === "" && !TupleStore.outgoing && !TupleStore.connectedOnce
+  // Unverified against a real incoming call: someone in a call this side did
+  // not start, before anyone has connected, is treated as ringing (see
+  // Model.callPhase). Our own ring out, a connected call that blips and a
+  // room we sit in alone never are. A call placed before the shell started is
+  // indistinguishable from an incoming one: the client says nothing about who
+  // placed it.
+  readonly property bool ringing: TupleStore.callPhase === "ringing" && TupleStore.calling === ""
   readonly property var rooms: ready && showRooms ? Model.visibleRooms(TupleStore.rooms, search) : []
   readonly property var people: ready && showPeople ? Model.visibleContacts(TupleStore.contacts, search) : []
   property string search: ""
@@ -58,7 +58,8 @@ Panel {
   readonly property string barText: Model.barText(barStyle, {
     loggedIn: TupleStore.loggedIn, inCall: TupleStore.inCall, muted: TupleStore.muted,
     sharing: TupleStore.sharing, participants: TupleStore.participants,
-    connected: TupleStore.connected, connectedOnce: TupleStore.connectedOnce
+    connected: TupleStore.connected, connectedOnce: TupleStore.connectedOnce,
+    outgoing: TupleStore.outgoing
   })
 
   // Alerts and sounds belong to the one store, set from this widget's settings.
@@ -480,7 +481,7 @@ Panel {
 
             PanelSectionHeader {
               text: root.ringing ? "INCOMING CALL"
-                : (TupleStore.outgoing && !TupleStore.connected ? "CALLING" : "CURRENT CALL")
+                : (TupleStore.callPhase === "calling" || TupleStore.calling !== "" ? "CALLING" : "CURRENT CALL")
               foreground: root.foreground
               fontFamily: root.fontFamily
             }

@@ -201,7 +201,7 @@ test("the status summary reads in priority order", () => {
   assert.equal(Model.statusSummary({ ...base, daemonRunning: false }), "Stopped")
   assert.equal(Model.statusSummary({ ...base, loggedIn: false }), "Signed out")
   assert.equal(Model.statusSummary(base), "In a call, muted")
-  assert.equal(Model.statusSummary({ ...base, connected: false }), "Ringing")
+  assert.equal(Model.statusSummary({ ...base, connected: false, participants: [{ name: "Grace Hopper" }] }), "Ringing")
   assert.equal(Model.statusSummary({ ...base, connected: false, connectedOnce: true }), "In a call, muted")
   assert.equal(Model.statusSummary({ ...base, sharing: true }), "Sharing")
   assert.equal(Model.statusSummary({ ...base, inCall: false }), "Ready")
@@ -296,4 +296,20 @@ test("panel sizes", () => {
   assert.deepEqual(Model.panelMetrics(undefined), { width: 380, height: 620 })
   assert.ok(Model.panelMetrics("compact").height < 620)
   assert.ok(Model.panelMetrics("tall").height > 620)
+})
+
+test("a call is ringing only while someone is there and nobody has connected", () => {
+  const ring = { inCall: true, connected: false, connectedOnce: false, participants: [{ name: "Grace Hopper" }], outgoing: false }
+  assert.equal(Model.callPhase(ring), "ringing")
+  assert.equal(Model.callPhase({ ...ring, outgoing: true }), "calling")
+  assert.equal(Model.callPhase({ ...ring, participants: [] }), "", "alone in a room is not ringing")
+  assert.equal(Model.callPhase({ ...ring, connected: true }), "")
+  assert.equal(Model.callPhase({ ...ring, connectedOnce: true }), "", "a blip is not ringing")
+  assert.equal(Model.callPhase({ ...ring, inCall: false }), "")
+  assert.equal(Model.barText("status", { ...ring, loggedIn: true, outgoing: true }), "Calling")
+  assert.equal(Model.barText("status", { ...ring, loggedIn: true, participants: [] }), "In call")
+  const base = { installed: true, daemonRunning: true, loggedIn: true, muted: false, sharing: false }
+  assert.equal(Model.statusSummary({ ...base, ...ring }), "Ringing")
+  assert.equal(Model.statusSummary({ ...base, ...ring, outgoing: true }), "Calling")
+  assert.equal(Model.statusSummary({ ...base, ...ring, participants: [] }), "In a call")
 })
