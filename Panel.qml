@@ -56,8 +56,8 @@ Panel {
   function sectionOrder() {
     var order = ["header"]
     if (TupleStore.inCall) order.push("call")
-    if (rooms.length > 0) order.push("rooms")
-    if (people.length > 0) order.push("people")
+    if (rooms.length > 0 && !paged) order.push("rooms")
+    if (people.length > 0 && !paged) order.push("people")
     return order
   }
 
@@ -134,7 +134,7 @@ Panel {
   onOpenedChanged: if (opened) {
     cursorActive = false
     shareWarningOpen = false
-    shareHelpOpen = false
+    page = ""
     roomList.positionViewAtBeginning()
     peopleList.positionViewAtBeginning()
     if (!TupleStore.installed) TupleStore.probe()
@@ -165,11 +165,10 @@ Panel {
   // XWAYLAND-SHARE-WORKAROUND: starting a share crashes Xwayland on Hyprland (UPSTREAM.md), so
   // every share asks first, until the user turns the warning off. Stopping a
   // share never asks. Temporary: delete everything tagged XWAYLAND-SHARE-WORKAROUND (here, the
-  // warning row, the help section and its footer button, the manifest setting,
+  // warning row, the help page and its footer button, the manifest setting,
   // their tests) once the upstream fix ships; shareFromPanel() then just calls
   // shareAnyway().
   property bool shareWarningOpen: false
-  property bool shareHelpOpen: false
   readonly property bool warnBeforeSharing: Model.toBool(setting("warnBeforeSharing", true), true)
 
   function shareFromPanel(): void {
@@ -191,8 +190,25 @@ Panel {
     shareAnyway()
   }
 
-  function toggleShareHelp(): void {
-    shareHelpOpen = !shareHelpOpen
+  // One page at a time over the room and people lists: "" is the lists,
+  // "help" explains why sharing breaks the desktop. The call stays on top.
+  property string page: ""
+  readonly property bool paged: page !== ""
+
+  function togglePage(name): void {
+    page = page === name ? "" : name
+    if (paged) pageView.contentY = 0
+  }
+
+  function scrollPage(dy): void {
+    var end = Math.max(0, pageView.contentHeight - pageView.height)
+    pageView.contentY = Math.max(0, Math.min(end, pageView.contentY + dy * Style.space(40)))
+  }
+
+  // Esc leaves a page before it closes the panel.
+  function back(): void {
+    if (paged) page = ""
+    else close()
   }
 
   // Omarchy's own pattern (its clock panel): apply locally so the panel
@@ -241,18 +257,19 @@ Panel {
     contentWidth: panel.fittedContentWidth(Style.space(380))
     // Signed in, the panel keeps one height and its content scrolls, so
     // searching never resizes it. Setup and sign-in fit their few lines.
-    contentHeight: panel.fittedContentHeight(root.ready ? Style.space(620) : column.implicitHeight, Style.space(620))
+    contentHeight: panel.fittedContentHeight(root.ready || root.paged ? Style.space(620) : column.implicitHeight, Style.space(620))
 
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
       blocked: root.editorsFocused > 0
       onMoveRequested: function(dx, dy) {
+        if (root.paged) { root.scrollPage(dy); return }
         if (!root.cursorActive) { root.cursorActive = true; return }
         root.moveCursor(dy)
       }
       onActivateRequested: if (root.cursorActive) root.activateCursor()
-      onCloseRequested: root.close()
+      onCloseRequested: root.back()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
         var key = String(t).toLowerCase()
@@ -260,7 +277,7 @@ Panel {
         else if (key === "s") root.shareFromPanel()
         else if (key === "l") TupleStore.leave()
         else if (key === "a" && root.ringing) TupleStore.accept()
-        else if (key === "/" && root.ready) searchField.forceActiveFocus()
+        else if (key === "/" && root.ready && !root.paged) searchField.forceActiveFocus()
       }
 
       // The panel itself does not scroll: each list scrolls on its own, and
@@ -272,7 +289,7 @@ Panel {
         ColumnLayout {
           id: column
           width: parent.width
-          height: root.ready ? parent.height : implicitHeight
+          height: root.ready || root.paged ? parent.height : implicitHeight
           spacing: Style.space(12)
 
           // ------------------------------------------------------- header
@@ -588,10 +605,11 @@ Panel {
           }
 
           // -------------------------------------------------------- rooms
-          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.ready; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.ready && !root.paged; foreground: root.foreground }
 
           ColumnLayout {
-            visible: root.ready
+            objectName: "roomsSection"
+            visible: root.ready && !root.paged
             Layout.fillWidth: true
             // Layouts only resize fillHeight items; the room list's own
             // maximum stops this section from growing past it.
@@ -636,10 +654,11 @@ Panel {
           }
 
           // ------------------------------------------------------- people
-          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.ready; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.ready && !root.paged; foreground: root.foreground }
 
           ColumnLayout {
-            visible: root.ready
+            objectName: "peopleSection"
+            visible: root.ready && !root.paged
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: Style.space(8)
@@ -685,48 +704,81 @@ Panel {
             }
           }
 
-          // --------------------------------------------- why sharing breaks
-          // XWAYLAND-SHARE-WORKAROUND: the help section.
-          Column {
-            visible: root.shareHelpOpen
+          // --------------------------------------------------------- page
+          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.paged; foreground: root.foreground }
+
+          ColumnLayout {
+            visible: root.paged
             Layout.fillWidth: true
-            Layout.minimumHeight: implicitHeight
-            spacing: Style.space(6)
+            Layout.fillHeight: true
+            spacing: Style.space(8)
 
-            PanelSectionHeader {
-              text: "WHY SHARING BREAKS X11 APPS"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-            }
-
-            Text {
-              width: parent.width
-              text: "Starting a screen share makes Xwayland crash. Xwayland is the part of your desktop that runs older X11 apps like Steam, Zoom and many games, and Tuple's own window for viewing other people's screens. "
-                + "This isn't Omatuple: it happens inside Tuple's Linux client and Xwayland, and Hyprland doesn't restart Xwayland afterwards. "
-                + "Tuple, X.org and Hyprland have to fix it.\n\n"
-                + "After you share, X11 apps won't open and you can't view anyone's screen until you log out and back in, and logging out closes your open apps. "
-                + "Until it's fixed: close X11 apps before sharing, and plan to log out and back in afterwards."
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              wrapMode: Text.WordWrap
-            }
-
-            Row {
+            RowLayout {
+              Layout.fillWidth: true
+              Layout.minimumHeight: implicitHeight
               spacing: Style.space(6)
 
-              Button {
-                text: "Details"
+              PanelActionButton {
+                iconText: "\u{f004d}"
+                tooltipText: "Back (Esc)"
                 foreground: root.foreground
                 fontFamily: root.fontFamily
-                onClicked: Qt.openUrlExternally("file://" + TupleStore.pluginDir + "/UPSTREAM.md")
+                onClicked: root.back()
               }
 
-              Button {
-                text: "Close"
+              PanelSectionHeader {
+                Layout.fillWidth: true
+                // XWAYLAND-SHARE-WORKAROUND: the help page's title.
+                text: root.page === "help" ? "WHY SHARING BREAKS X11 APPS" : ""
                 foreground: root.foreground
                 fontFamily: root.fontFamily
-                onClicked: root.shareHelpOpen = false
+              }
+            }
+
+            // Pages scroll on their own; the call and footer stay put.
+            Flickable {
+              id: pageView
+              objectName: "pageView"
+              Layout.fillWidth: true
+              Layout.fillHeight: true
+              clip: true
+              boundsBehavior: Flickable.StopAtBounds
+              contentWidth: width
+              contentHeight: pageContent.implicitHeight
+              ScrollBar.vertical: ScrollBar {
+                policy: pageView.contentHeight > pageView.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+              }
+
+              Column {
+                id: pageContent
+                width: pageView.width - Style.space(14)
+
+                // XWAYLAND-SHARE-WORKAROUND: the help page.
+                Column {
+                  visible: root.page === "help"
+                  width: parent.width
+                  spacing: Style.space(8)
+
+                  Text {
+                    width: parent.width
+                    text: "Starting a screen share makes Xwayland crash. Xwayland is the part of your desktop that runs older X11 apps like Steam, Zoom and many games, and Tuple's own window for viewing other people's screens. "
+                      + "This isn't Omatuple: it happens inside Tuple's Linux client and Xwayland, and Hyprland doesn't restart Xwayland afterwards. "
+                      + "Tuple, X.org and Hyprland have to fix it.\n\n"
+                      + "After you share, X11 apps won't open and you can't view anyone's screen until you log out and back in, and logging out closes your open apps. "
+                      + "Until it's fixed: close X11 apps before sharing, and plan to log out and back in afterwards."
+                    color: root.dim
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    wrapMode: Text.WordWrap
+                  }
+
+                  Button {
+                    text: "Details"
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    onClicked: Qt.openUrlExternally("file://" + TupleStore.pluginDir + "/UPSTREAM.md")
+                  }
+                }
               }
             }
           }
@@ -770,9 +822,9 @@ Panel {
               PanelActionButton {
                 iconText: "\u{f02d7}"
                 tooltipText: "Why does sharing break my desktop?"
-                foreground: root.shareHelpOpen ? root.accent : root.foreground
+                foreground: root.page === "help" ? root.accent : root.foreground
                 fontFamily: root.fontFamily
-                onClicked: root.toggleShareHelp()
+                onClicked: root.togglePage("help")
               }
 
               PanelActionButton {

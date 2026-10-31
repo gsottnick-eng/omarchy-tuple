@@ -39,13 +39,13 @@ With the dropdown open:
 
 | Key | Action |
 | --- | --- |
-| Arrows, Enter | Move through rooms and people, join or call |
+| Arrows, Enter | Move through rooms and people, join or call; on a page, scroll |
 | `/` | Search |
 | `m` | Mute or unmute |
 | `s` | Share or stop sharing your screen |
 | `l` | Leave the call |
 | `a` | Answer an incoming call |
-| Esc | Close |
+| Esc | Back from a page such as help, otherwise close |
 
 Right-click the bar icon during a call to mute.
 
