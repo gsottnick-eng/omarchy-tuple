@@ -36,9 +36,10 @@ Diagnosing a user's problem? Start with `agents/diagnose/SKILL.md`.
    daemon's socket instead (see "The Tuple client"). Never call `tuple auth`.
    Other private text stays off command lines too: call alerts name the people
    in a call and a copied link may be a sign-in or room link, so they reach
-   `bin/tuple-notify` and `wl-copy` on stdin. The `tuple` commands themselves
-   (`call start <email>`, `rooms join <slug>`) still take arguments; the client
-   offers no other way.
+   `bin/tuple-notify` and `wl-copy` on stdin. Calls, joins and favorites name a
+   person, a room or a link, so the plugin sends them to the daemon's HTTP API
+   itself (see "The Tuple client") instead of running `tuple call start <email>`
+   and the like. `tests/panel_test.py` asserts that no command line carries them.
 3. **Commands are argument lists, never shell strings.** The single `sh -c`
    (finding the binary) takes no user input. Values from the client or the
    user (emails, slugs, links) go after `--`, so none is read as an option.
@@ -74,16 +75,33 @@ this plugin is built on. Behaviour that is not obvious from `tuple --help`:
   also reports as a `PeerClosedError`. The plugin sends this frame itself
   (`Model.authFrame`, `TupleStore.submitCode`), so the code never reaches `/proc`.
 - `call start <person>` blocks until the other side answers (exit 0) or the call
-  ends (exit 2), so it runs outside the shared command queue.
+  ends (exit 2). The plugin doesn't run it (see the daemon API below).
 - People are identified by email or full name. The numeric id does not resolve.
 - `share` and `unshare` are deprecated with no replacement. The panel offers
   Share only while `tuple --help` still lists them.
 - The daemon re-executes the binary and keeps its parent's arguments, so it
   appears in `ps` as a second `tuple state follow`.
-- The JSON commands are HTTP requests to the daemon over the same socket.
-  `rooms join <slug>` puts the slug into the request path unescaped, so
-  `Model.parseRooms` drops any room whose slug isn't plain letters, digits,
-  `-` or `_`.
+- **The JSON commands are HTTP/1.1 requests to the daemon** over the same
+  socket (`Host: tuple`, `Connection: close`; the daemon answers JSON and closes).
+  The API is undocumented; these requests were read from what the client sends.
+  The plugin sends the ones that carry private values itself (`Model.js`, "daemon
+  API"), skipping the client's lookups by email or slug because the streams
+  already give it the ids:
+
+  | Client command | Request |
+  | --- | --- |
+  | `call start <person>` | `POST /call` `{"user_id": <id>}` |
+  | `call join <person>` (in a joinable call) | `POST /call/join` `{"user_id": <id>}` |
+  | `rooms join <slug>`, `call join <…/c/slug link>` | `POST /call/join` `{"url": "<slug>"}` |
+  | `call join <any other link>` | `POST /call/join` `{"url": "<link>"}` |
+  | `contacts favorite` / `unfavorite` | `POST` / `DELETE /contacts/<id>/favorite` |
+  | `rooms favorite` / `unfavorite` | `GET /rooms/<slug>` for its `id`, then `POST` / `DELETE /rooms/<id>/favorite` |
+
+  Before calling, the client refuses an `offline` person, or a `busy` one whose
+  call isn't joinable; `Model.callRequest` does the same. The client itself puts
+  the slug into the request path unescaped, so `Model.parseRooms` drops any room
+  whose slug isn't plain letters, digits, `-` or `_`. Each new Tuple release:
+  re-check these against the client (see the `tuple-release` checklist).
 - In `rooms list` / `rooms follow` output, `members` is who is in the room
   right now, not the room's membership; it is `[]` when the room is empty.
 - `active_call` is not occupancy. It can be `false` on an occupied room, and

@@ -57,7 +57,7 @@ Singleton {
   property bool installing: false
   property string installMessage: ""
 
-  readonly property bool busy: actionProcess.running || callProcess.running || installProcess.running
+  readonly property bool busy: actionProcess.running || calling !== "" || installProcess.running
   readonly property string summary: Model.statusSummary({
     installed: installed, daemonRunning: daemonRunning, loggedIn: loggedIn,
     inCall: inCall, muted: muted, sharing: sharing
@@ -250,29 +250,35 @@ Singleton {
   }
 
   function leave() {
-    if (callProcess.running) callProcess.running = false
     if (inCall || calling !== "") run(["call", "leave"], "Leaving the call…", true)
     calling = ""
+    callTimer.stop()
   }
 
   function accept() {
     run(["call", "accept"], "Answering…")
   }
 
-  // `call start` waits until the other side answers, so it gets its own
-  // process: the action queue stays free for mute or leave meanwhile.
+  // Calls, joins and favorites name a person, a room or a link, so they go to
+  // the daemon's API on its socket, never on a `tuple` command line (Model.js,
+  // "daemon API"). The state stream shows what happened next.
   function callPerson(person) {
-    if (!person || !installed || callProcess.running) return
+    if (!person || !installed || calling !== "") return
+    if (pickerPending) { note("Tuple is waiting for the share picker…"); return }
+    var call = Model.callRequest(person)
+    if (call.error) { fail(call.error); return }
     calling = person.name
     progress("Calling " + person.name + "…")
-    callProcess.command = command(person.joinable
-      ? ["call", "join", "--", person.email]
-      : ["call", "start", "--", person.email])
-    callProcess.running = true
+    callTimer.restart()
+    api("POST", call.path, call.body, function(reply) {
+      if (root._settled(reply)) return
+      root.calling = ""
+      callTimer.stop()
+    })
   }
 
   function joinRoom(room) {
-    if (room) run(["rooms", "join", "--", room.slug], "Joining " + room.name + "…")
+    if (room) join(room.slug, "Joining " + room.name + "…")
   }
 
   function joinUrl(url) {
@@ -281,16 +287,48 @@ Singleton {
       fail("Paste a full https:// call or room link.")
       return false
     }
-    run(["call", "join", "--", value], "Joining…")
+    join(Model.joinTarget(value), "Joining…")
     return true
   }
 
-  function favoritePerson(person) {
-    if (person) run(["contacts", person.favorite ? "unfavorite" : "favorite", "--", person.email], "")
+  function join(target, label) {
+    if (pickerPending) { note("Tuple is waiting for the share picker…"); return }
+    progress(label)
+    api("POST", "/call/join", { url: target }, _settled)
   }
 
+  function favoritePerson(person) {
+    if (!person || !/^\d+$/.test(String(person.id))) return
+    api(person.favorite ? "DELETE" : "POST", "/contacts/" + person.id + "/favorite", null, _settled)
+  }
+
+  // The rooms stream has no room ids; the room's own record does.
   function favoriteRoom(room) {
-    if (room) run(["rooms", room.favorite ? "unfavorite" : "favorite", "--", room.slug], "")
+    if (!room) return
+    api("GET", "/rooms/" + encodeURIComponent(room.slug), null, function(reply) {
+      var id = reply.body && reply.body.id ? String(reply.body.id) : ""
+      if (!root._settled(reply)) return
+      if (id === "") { root.fail("Tuple didn't say which room that is."); return }
+      root.api(room.favorite ? "DELETE" : "POST", "/rooms/" + encodeURIComponent(id) + "/favorite", null, root._settled)
+    })
+  }
+
+  function api(method, path, body, done) {
+    var runtime = Quickshell.env("XDG_RUNTIME_DIR")
+    if (!runtime) { done({ status: 0, body: null }); return }
+    apiRequest.createObject(root, {
+      path: runtime + "/tuple-0", request: Model.httpRequest(method, path, body), done: done
+    })
+  }
+
+  // Reports a failed request; true when it succeeded.
+  function _settled(reply) {
+    if (reply.status >= 200 && reply.status < 300) {
+      if (status.slice(-1) === "…" && calling === "") status = ""
+      return true
+    }
+    fail(Model.apiError(reply))
+    return false
   }
 
   // Links can be private (a sign-in link, a room link), so wl-copy reads them
@@ -468,7 +506,9 @@ Singleton {
 
   onInCallChanged: {
     if (inCall) {
+      if (calling !== "" || status.slice(-1) === "…") status = ""
       calling = ""
+      callTimer.stop()
       startStreams()
     } else {
       shareStream.running = false
@@ -626,15 +666,49 @@ Singleton {
     }
   }
 
-  Process {
-    id: callProcess
-    stderr: StdioCollector { id: callErr; waitForEnd: true }
-    onExited: function(exitCode) {
-      var who = root.calling
+  // One request to the daemon's API: write it, collect the whole answer, and
+  // hand it over once the daemon closes the connection.
+  Component {
+    id: apiRequest
+    Socket {
+      id: apiSocket
+      property string request: ""
+      property var done: null
+      property string reply: ""
+      property bool opened: false
+      property bool finished: false
+      // Unsplit: an answer's body has no trailing newline.
+      parser: SplitParser { splitMarker: ""; onRead: function(data) { apiSocket.reply += data } }
+      onConnectedChanged: {
+        if (connected) {
+          opened = true
+          write(apiSocket.request)
+          flush()
+        } else {
+          finish()
+        }
+      }
+      // The daemon closing after its answer is an error too, and can come before
+      // the answer is read: once connected, the disconnect finishes the request.
+      onError: if (!opened) finish()
+      function finish() {
+        if (finished) return
+        finished = true
+        done(Model.parseHttpResponse(reply))
+        // Later: a refused connection finishes while the object is still being built.
+        Qt.callLater(apiSocket.destroy)
+      }
+      Component.onCompleted: connected = true
+    }
+  }
+
+  // An unanswered call ends without a state change the plugin can see.
+  Timer {
+    id: callTimer
+    interval: 60000
+    onTriggered: if (root.calling !== "" && !root.inCall) {
+      root.note(root.calling + " didn't pick up")
       root.calling = ""
-      if (exitCode === 0) root.note("Connected")
-      else if (exitCode === 2) root.note((who || "They") + " didn't pick up")
-      else if (exitCode > 0) root.fail(Model.errorMessage(callErr.text))
     }
   }
 
