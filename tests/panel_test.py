@@ -337,6 +337,24 @@ class PanelTest(unittest.TestCase):
         self.assertTrue(state["inCall"])
         self.assertEqual(state["calling"], "")
 
+    def test_a_call_still_connecting_is_not_an_incoming_call(self):
+        # The client reports a call as `in_call` the moment it is placed, while
+        # the other side is still `signaling`. A call the plugin dialled shows
+        # as calling, never as an incoming call to answer.
+        harness = self.harness(logged_in=True)
+        state = harness.run(["flag:ringing", "call:Grace Hopper", "wait:1200"])
+        self.assertTrue(state["inCall"])
+        self.assertFalse(state["connected"])
+        self.assertFalse(state["panel"]["ringing"], "an outgoing call is never incoming")
+        self.assertEqual(state["summary"], "Ringing")
+
+    def test_an_incoming_call_rings_until_it_connects(self):
+        harness = self.harness(logged_in=True, in_call=True, flags=("ringing", "muted"))
+        state = harness.run(["wait:300"])
+        self.assertTrue(state["inCall"])
+        self.assertFalse(state["connected"])
+        self.assertTrue(state["panel"]["ringing"])
+
     def test_a_busy_contact_in_a_joinable_call_is_joined_not_rung(self):
         harness = self.harness(logged_in=True)
         harness.run(["call:Katherine Johnson", "wait:1000"])

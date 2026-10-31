@@ -59,13 +59,17 @@ Singleton {
   property string status: ""
   property string error: ""
   property string calling: ""
+  // True from asking the daemon to start or join a call until it connects:
+  // while it holds, a not-yet-connected call is ours ringing out, never an
+  // incoming call to answer.
+  property bool outgoing: false
   property bool installing: false
   property string installMessage: ""
 
   readonly property bool busy: actionProcess.running || calling !== "" || installProcess.running
   readonly property string summary: Model.statusSummary({
     installed: installed, daemonRunning: daemonRunning, loggedIn: loggedIn,
-    inCall: inCall, muted: muted, sharing: sharing
+    inCall: inCall, muted: muted, sharing: sharing, connected: connected
   })
   readonly property string pluginDir: {
     var dir = String(Qt.resolvedUrl("."))
@@ -166,6 +170,7 @@ Singleton {
     version = s.version
     updateVersion = s.updateVersion
     inCall = s.inCall
+    if (!s.inCall || s.connected) outgoing = false
     // Mid-call, tell the room who came and went — but only once the change
     // has held long enough not to be a network blip (see participantDebounce).
     // The call's own start and end are announced by onInCallChanged.
@@ -262,6 +267,7 @@ Singleton {
   function leave() {
     if (inCall || calling !== "") run(["call", "leave"], "Leaving the call…", true)
     calling = ""
+    outgoing = false
     callTimer.stop()
   }
 
@@ -277,6 +283,7 @@ Singleton {
     var call = Model.callRequest(person)
     if (call.error) { fail(call.error); return }
     calling = person.name
+    outgoing = true
     progress("Calling " + person.name + "…")
     callTimer.restart()
     api("POST", call.path, call.body, function(reply) {
@@ -284,6 +291,7 @@ Singleton {
       if (root.calling === "") return
       if (root._settled(reply)) return
       root.calling = ""
+      root.outgoing = false
       callTimer.stop()
     })
   }
@@ -304,8 +312,11 @@ Singleton {
 
   function join(target, label) {
     if (!_apiReady()) return
+    outgoing = true
     progress(label)
-    api("POST", "/call/join", { url: target }, _settled)
+    api("POST", "/call/join", { url: target }, function(reply) {
+      if (!root._settled(reply)) root.outgoing = false
+    })
   }
 
   function favoritePerson(person) {
