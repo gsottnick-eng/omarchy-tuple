@@ -6,6 +6,14 @@ rooms, your people, and call controls, one click from the bar.
 
 ![The Omatuple dropdown](preview.png)
 
+> [!WARNING]
+> **Sharing your screen crashes Xwayland**, a bug in Tuple's Linux client and
+> Xwayland, not Omatuple. Every X11 app you have open closes (Steam, Zoom,
+> games), and they won't start again until you log out and back in. Calls
+> work, and so does watching someone else's screen until you share. Omatuple
+> warns you before each share.
+> Details in [Known issues](#known-issues).
+
 ## Features
 
 - **Rooms**: one scrolling list with your room first, then favorites A to Z,
