@@ -182,6 +182,8 @@ def apply_step(step: str, plugin: QObject, store: QObject, harness=None):
         invoke(store, "callPerson", entry("contacts"))
     elif name == "favorite":
         invoke(store, "favoritePerson", entry("contacts"))
+    elif name == "favorite-room":
+        invoke(store, "favoriteRoom", entry("rooms"))
     elif name == "join":
         invoke(store, "joinRoom", entry("rooms"))
     elif name == "join-url":

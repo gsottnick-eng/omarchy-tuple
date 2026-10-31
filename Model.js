@@ -230,6 +230,57 @@ function authFrame(code) {
   return String.fromCharCode(payload.length) + zeros + String.fromCharCode(2) + zeros + payload
 }
 
+// ------------------------------------------------------------- daemon API
+//
+// The JSON commands are HTTP requests to the daemon over its socket. Calls,
+// joins and favorites name a person, a room or a link, which would be readable
+// in /proc as `tuple` arguments, so the plugin sends those requests itself:
+// the ones the client sends, minus its lookups by email or slug, since the
+// streams already give the plugin the ids.
+
+// One request, ASCII only, so its length in characters is its length in bytes.
+function httpRequest(method, path, body) {
+  var payload = body === undefined || body === null ? "" : JSON.stringify(body).replace(
+    /[\u0080-\uffff]/g, function(c) { return "\\u" + ("000" + c.charCodeAt(0).toString(16)).slice(-4) })
+  return method + " " + path + " HTTP/1.1\r\nHost: tuple\r\nConnection: close\r\n"
+    + "X-Tuple-Client: human\r\n"
+    + (payload !== "" ? "Content-Type: application/json\r\n" : "")
+    + (payload !== "" || method !== "GET" ? "Content-Length: " + payload.length + "\r\n" : "")
+    + "\r\n" + payload
+}
+
+// { status, body }; status 0 when there was no answer at all.
+function parseHttpResponse(raw) {
+  var s = text(raw)
+  var status = /^HTTP\/1\.[01] (\d{3})/.exec(s)
+  var split = s.indexOf("\r\n\r\n")
+  if (!status || split < 0) return { status: 0, body: null }
+  return { status: Number(status[1]), body: parseJson(s.slice(split + 4)) }
+}
+
+function apiError(reply) {
+  if (reply && reply.body && typeof reply.body.error === "string") return elide(reply.body.error)
+  if (!reply || reply.status === 0) return "Couldn't reach Tuple. Is it running?"
+  return "Tuple refused the request (" + reply.status + ")"
+}
+
+// `tuple call start|join <person>`: the client refuses an offline person, or a
+// busy one whose call can't be joined, before asking the daemon.
+function callRequest(person) {
+  var p = person || {}
+  if (!/^\d+$/.test(text(p.id))) return { error: "Tuple didn't give this person an id." }
+  if (p.status === "offline") return { error: p.name + " is offline" }
+  if (p.status === "busy" && !p.joinable) return { error: p.name + " is busy and their call is not joinable" }
+  return { path: p.joinable ? "/call/join" : "/call", body: { user_id: Number(p.id) } }
+}
+
+// `tuple call join <link>` sends the slug of a /c/ link and any other link whole.
+function joinTarget(url) {
+  var value = text(url).trim()
+  var slug = /^https:\/\/[^\/?#]+\/c\/([^\/?#]+)/.exec(value)
+  return slug ? slug[1] : value
+}
+
 // Only the obviously-wrong is rejected here; the client decides the rest.
 function isJoinableUrl(value) {
   return /^https:\/\/\S+$/.test(text(value).trim())

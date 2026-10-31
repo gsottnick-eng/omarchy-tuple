@@ -73,8 +73,12 @@ class SplitParser(QObject):
         self._buffer = ""
 
     def feed(self, chunk):
+        if self._split_marker == "":
+            # Unsplit: every chunk as it arrives, as Quickshell does.
+            self.read.emit(chunk)
+            return
         self._buffer += chunk
-        marker = self._split_marker or "\n"
+        marker = self._split_marker
         while marker in self._buffer:
             head, self._buffer = self._buffer.split(marker, 1)
             self.read.emit(head)
@@ -348,9 +352,12 @@ class Socket(QObject):
         self._path = ""
         self._parser = None
         self._socket = QLocalSocket(self)
-        self._socket.connected.connect(self.connectedChanged.emit)
-        self._socket.disconnected.connect(self._on_disconnected)
-        self._socket.readyRead.connect(self._on_ready_read)
+        # Lambdas, not bound methods: PySide holds bound-method slots weakly, so
+        # a socket QML creates at run time would lose them when its Python
+        # wrapper is collected. The lambdas keep it alive as long as the socket.
+        self._socket.connected.connect(lambda: self.connectedChanged.emit())
+        self._socket.disconnected.connect(lambda: self._on_disconnected())
+        self._socket.readyRead.connect(lambda: self._on_ready_read())
         self._socket.errorOccurred.connect(lambda e: self.error.emit(int(e.value) if hasattr(e, "value") else int(e)))
 
     def _get_path(self):

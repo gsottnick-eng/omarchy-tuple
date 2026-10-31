@@ -286,29 +286,70 @@ class PanelTest(unittest.TestCase):
         self.assertEqual([p["stdin"] for p in copies], [link])
         self.assertNotIn(link, command_lines(harness.final))
 
-    def test_calling_someone_uses_their_email_and_the_call_shows_up(self):
+    # Calls, joins and favorites name a person, a room or a link, so they go to
+    # the daemon's API on its socket; no `tuple` command line carries them.
+    def assert_no_destination_in_argv(self, harness, *values):
+        for value in ("@",) + values:
+            self.assertFalse(any(value in line for line in harness.argv()),
+                             f"{value!r} reached a command line: {harness.argv()!r}")
+
+    def test_calling_someone_goes_to_the_daemon_by_id_and_the_call_shows_up(self):
         harness = self.harness(logged_in=True)
         state = harness.run(["call:Grace Hopper", "wait:1200"])
-        self.assertIn("call start -- grace@example.com", harness.argv())
+        self.assertIn('POST /call {"user_id":1003}', harness.socket_requests())
+        self.assert_no_destination_in_argv(harness)
         self.assertTrue(state["inCall"])
         self.assertEqual(state["calling"], "")
 
     def test_a_busy_contact_in_a_joinable_call_is_joined_not_rung(self):
         harness = self.harness(logged_in=True)
         harness.run(["call:Katherine Johnson", "wait:1000"])
-        self.assertIn("call join -- katherine@example.com", harness.argv())
+        self.assertIn('POST /call/join {"user_id":1004}', harness.socket_requests())
+        self.assert_no_destination_in_argv(harness)
 
-    def test_joining_a_room_uses_its_slug(self):
+    def test_a_refused_call_shows_the_daemons_error_and_stops_calling(self):
+        harness = self.harness(logged_in=True)
+        state = harness.run(["call:Edsger Dijkstra", "wait:1000"])
+        self.assertEqual(state["error"], "Edsger Dijkstra declined")
+        self.assertEqual(state["calling"], "")
+        self.assertFalse(state["inCall"])
+
+    def test_joining_a_room_sends_its_slug_to_the_daemon(self):
         harness = self.harness(logged_in=True)
         state = harness.run(["join:room-16", "wait:1000"])
-        self.assertIn("rooms join -- room-16", harness.argv())
+        self.assertIn('POST /call/join {"url":"room-16"}', harness.socket_requests())
+        self.assert_no_destination_in_argv(harness, "room-16")
         self.assertTrue(state["inCall"])
+
+    def test_a_pasted_link_joins_through_the_daemon_like_the_client_would(self):
+        harness = self.harness(logged_in=True)
+        harness.run(["join-url:https://tuple.example/c/room-1?from=chat", "join-url:https://tuple.example/r/other",
+                     "wait:1000"])
+        requests = harness.socket_requests()
+        self.assertIn('POST /call/join {"url":"room-1"}', requests)
+        self.assertIn('POST /call/join {"url":"https://tuple.example/r/other"}', requests)
+        self.assert_no_destination_in_argv(harness, "tuple.example")
 
     def test_a_pasted_link_must_be_https(self):
         harness = self.harness(logged_in=True)
         state = harness.run(["join-url:tuple.example/c/room-1"])
         self.assertNotEqual(state["error"], "")
-        self.assertFalse(any(line.startswith("call join") for line in harness.argv()))
+        self.assertEqual(harness.socket_requests(), [])
+
+    def test_favorites_go_to_the_daemon_by_id(self):
+        harness = self.harness(logged_in=True)
+        harness.run(["favorite:Grace Hopper", "favorite:Edsger Dijkstra",
+                     "favorite-room:room-15", "wait:300", "favorite-room:room-16", "wait:600"])
+        # Each request has its own connection, so they may land in any order.
+        self.assertCountEqual(harness.socket_requests(), [
+            "DELETE /contacts/1003/favorite",
+            "POST /contacts/1012/favorite",
+            "GET /rooms/room-15",
+            "POST /rooms/room-id-room-15/favorite",
+            "GET /rooms/room-16",
+            "DELETE /rooms/room-id-room-16/favorite",
+        ])
+        self.assert_no_destination_in_argv(harness, "room-15", "room-16")
 
     def test_mute_share_and_leave_follow_what_the_client_reports(self):
         harness = self.harness(logged_in=True, in_call=True)
@@ -334,13 +375,16 @@ class PanelTest(unittest.TestCase):
         # picker_holds: the fake client leaves the picker open, the way the
         # real daemon blocks until a screen is chosen.
         harness = self.harness(logged_in=True, in_call=True, flags=("picker_holds",))
-        harness.run(["wait:300", "share", "wait:800", "mute", "wait:500"])
+        harness.run(["wait:300", "share", "wait:800", "mute", "wait:500",
+                     "favorite:Grace Hopper", "favorite-room:room-15", "join:room-16", "wait:300"])
         held = harness.after(2)
         self.assertIn("share", harness.argv())
         self.assertTrue(held["status"].startswith("Choose a screen to share"))
         self.assertTrue(held["pickerPending"])
         # The daemon is blocked on the picker, so a mute must not run.
         self.assertNotIn("call mute", harness.argv())
+        # Nor do favorites or joins, which would wait unanswered on its socket.
+        self.assertEqual(harness.socket_requests(), [])
         self.assertIn("Tuple is waiting for the share picker", harness.final["status"],
                       "refused commands say why")
         # Leaving always works, picker or not.

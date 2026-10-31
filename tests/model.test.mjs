@@ -225,3 +225,42 @@ test("a room whose slug could reach another client endpoint is dropped", () => {
   ])
   assert.deepEqual(rooms.map((r) => r.slug).sort(), ["--format", "aB3dEf", "room-16"])
 })
+
+test("daemon API requests are ASCII HTTP the daemon accepts", () => {
+  assert.equal(Model.httpRequest("POST", "/call", { user_id: 1003 }),
+    "POST /call HTTP/1.1\r\nHost: tuple\r\nConnection: close\r\nX-Tuple-Client: human\r\n"
+    + "Content-Type: application/json\r\nContent-Length: 16\r\n\r\n{\"user_id\":1003}")
+  assert.match(Model.httpRequest("DELETE", "/contacts/1/favorite"), /Content-Length: 0\r\n\r\n$/)
+  assert.doesNotMatch(Model.httpRequest("GET", "/rooms/a"), /Content-Length/)
+  const unicode = Model.httpRequest("POST", "/call/join", { url: "https://tuple.example/r/é😀" })
+  assert.match(unicode, /^[\x00-\x7f]*$/, "length in characters is length in bytes")
+  assert.equal(JSON.parse(unicode.split("\r\n\r\n")[1]).url, "https://tuple.example/r/é😀")
+})
+
+test("daemon API answers parse to a status and body", () => {
+  assert.deepEqual(Model.parseHttpResponse("HTTP/1.1 409 Conflict\r\nA: b\r\n\r\n{\"error\":\"declined\"}"),
+    { status: 409, body: { error: "declined" } })
+  assert.deepEqual(Model.parseHttpResponse("HTTP/1.1 404 Not Found\r\n\r\n"), { status: 404, body: null })
+  assert.deepEqual(Model.parseHttpResponse(""), { status: 0, body: null })
+  assert.equal(Model.apiError({ status: 0, body: null }), "Couldn't reach Tuple. Is it running?")
+  assert.equal(Model.apiError({ status: 409, body: { error: "declined" } }), "declined")
+  assert.equal(Model.apiError({ status: 500, body: null }), "Tuple refused the request (500)")
+  assert.equal(Model.apiError({ status: 0, body: { error: "Tuple didn't answer." } }), "Tuple didn't answer.")
+})
+
+test("calls follow the client's own rules before reaching the daemon", () => {
+  const person = (status, joinable, id = 7) => ({ id, name: "Ada Lovelace", status, joinable })
+  assert.deepEqual(Model.callRequest(person("online", false)), { path: "/call", body: { user_id: 7 } })
+  assert.deepEqual(Model.callRequest(person("unknown", false)), { path: "/call", body: { user_id: 7 } })
+  assert.deepEqual(Model.callRequest(person("busy", true)), { path: "/call/join", body: { user_id: 7 } })
+  assert.equal(Model.callRequest(person("busy", false)).error, "Ada Lovelace is busy and their call is not joinable")
+  assert.equal(Model.callRequest(person("offline", false)).error, "Ada Lovelace is offline")
+  assert.ok(Model.callRequest(person("online", false, "7/../x")).error, "only numeric ids reach a path")
+})
+
+test("a pasted link joins by slug for /c/ links and whole otherwise, like the client", () => {
+  assert.equal(Model.joinTarget("https://tuple.app/c/abc123"), "abc123")
+  assert.equal(Model.joinTarget(" https://tuple.app/c/abc123/?x=1#f "), "abc123")
+  assert.equal(Model.joinTarget("https://tuple.app/r/abc123"), "https://tuple.app/r/abc123")
+  assert.equal(Model.joinTarget("https://example.com/some/path"), "https://example.com/some/path")
+})
