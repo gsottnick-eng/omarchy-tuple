@@ -122,17 +122,26 @@ Run it yourself if you'd rather:
 
 ## Settings
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| Show status text next to the bar icon | off | "In call", "Muted" or "Sharing" beside the icon |
-| Notify when a call starts or ends | on | A desktop notification, since the client shows none |
+Open the dropdown and click the gear in its footer. Every change applies at
+once.
+
+| Setting | Key | Default | Meaning |
+| --- | --- | --- | --- |
+| Next to the icon | `barStyle` | `icon` | `icon`: nothing; `status`: "In call", "Muted" or "Sharing"; `who`: first names of the people in your call |
+| Size | `panelSize` | `normal` | `compact`, `normal` or `tall` dropdown |
+| Highlight colour | `accent` | `theme` | Your theme's accent, its text colour (`foreground`) or its alert colour (`urgent`) |
+| Show rooms / people | `showRooms`, `showPeople` | on | Hide a list you don't use |
+| Call notifications | `callAlerts` | on | A desktop notification when a call starts or ends, or someone joins or leaves |
+| Warn before sharing | `warnBeforeSharing` | on | Ask before a share, which crashes X11 apps (see Known issues) |
 
 From the command line:
 
 ```bash
-omarchy bar set io.github.gsottnick.omatuple showLabel true
+omarchy bar set io.github.gsottnick.omatuple barStyle status
 omarchy bar set io.github.gsottnick.omatuple callAlerts false
 ```
+
+The older `showLabel true` still works and means `barStyle status`.
 
 Omatuple stores nothing about your account. Your rooms, people, and who you're
 signed in as come from Tuple every time.

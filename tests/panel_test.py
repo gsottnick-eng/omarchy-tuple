@@ -484,6 +484,38 @@ class PanelTest(unittest.TestCase):
         self.assertTrue(harness.after(6)["panel"]["roomsSection"])
         self.assertFalse(harness.final["panel"]["opened"], "a second Esc closes the panel")
 
+    def test_the_gear_opens_settings_and_each_choice_is_saved(self):
+        harness = self.harness(logged_in=True, in_call=True)
+        harness.run(["open", "wait:300", "settings", "wait:300",
+                     "click:showRoomsToggle", "wait:300",
+                     "pick:barStyleChoice=who", "wait:300",
+                     "pick:accentChoice=urgent", "wait:300",
+                     "back", "wait:300"])
+        page = harness.after(2)["panel"]
+        self.assertEqual(page["page"], "settings")
+        self.assertTrue(page["settingsPage"])
+        self.assertFalse(page["roomsSection"], "settings replaces the lists")
+        rooms_off = harness.after(4)
+        self.assertEqual(rooms_off["barWrites"][-1].get("showRooms"), False,
+                         "the choice is saved to the widget's shell.json entry")
+        who = harness.after(6)
+        self.assertEqual(who["panel"]["barStyle"], "who")
+        self.assertEqual(who["panel"]["barText"], "Alan", "who you're in a call with, by first name")
+        self.assertEqual(harness.after(8)["panel"]["accentRole"], "urgent")
+        final = harness.final["panel"]
+        self.assertEqual(final["page"], "")
+        self.assertFalse(final["roomsSection"], "rooms stay hidden")
+        self.assertTrue(final["peopleSection"])
+        self.assertEqual(final["rooms"], [], "hidden rooms are out of keyboard reach too")
+
+    def test_panel_size_and_the_old_show_label_setting(self):
+        normal = self.harness(logged_in=True).run(["open", "wait:300"])
+        compact = self.harness(logged_in=True).run(["open", "wait:300"], settings={"panelSize": "compact"})
+        self.assertLess(compact["panel"]["contentHeight"], normal["panel"]["contentHeight"])
+        old = self.harness(logged_in=True, in_call=True).run(["wait:300"], settings={"showLabel": "true"})
+        self.assertEqual(old["panel"]["barStyle"], "status")
+        self.assertEqual(old["panel"]["barText"], "In call")
+
     def test_the_panel_closes_before_the_share_picker_opens(self):
         harness = self.harness(logged_in=True, in_call=True)
         state = harness.run(["wait:300", "share-panel", "wait:300", "share-anyway", "wait:400"])

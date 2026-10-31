@@ -21,7 +21,16 @@ Panel {
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
-  readonly property color accent: Color.accent
+  // Appearance settings, all read from this widget's shell.json entry.
+  readonly property string barStyle: Model.barStyle(settings)
+  readonly property var metrics: Model.panelMetrics(setting("panelSize", "normal"))
+  readonly property bool showRooms: Model.toBool(setting("showRooms", true), true)
+  readonly property bool showPeople: Model.toBool(setting("showPeople", true), true)
+  readonly property bool listsShown: ready && !paged && (showRooms || showPeople)
+  // A theme role rather than a colour, so it follows theme changes.
+  readonly property string accentRole: setting("accent", "theme")
+  readonly property color accent: accentRole === "foreground" ? Color.foreground
+    : (accentRole === "urgent" ? Color.urgent : Color.accent)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property color hoverFill: Style.hoverFillFor(foreground, accent)
   readonly property color selectedFill: Style.selectedFillFor(foreground, accent)
@@ -30,8 +39,8 @@ Panel {
   // Unverified against a real incoming call: a call this side did not start
   // that has not connected yet is treated as ringing.
   readonly property bool ringing: TupleStore.inCall && !TupleStore.connected && TupleStore.calling === ""
-  readonly property var rooms: ready ? Model.visibleRooms(TupleStore.rooms, search) : []
-  readonly property var people: ready ? Model.visibleContacts(TupleStore.contacts, search) : []
+  readonly property var rooms: ready && showRooms ? Model.visibleRooms(TupleStore.rooms, search) : []
+  readonly property var people: ready && showPeople ? Model.visibleContacts(TupleStore.contacts, search) : []
   property string search: ""
 
   property string focusSection: "header"
@@ -42,11 +51,10 @@ Panel {
   // field has focus.
   property int editorsFocused: 0
 
-  readonly property string barText: {
-    if (!Model.toBool(setting("showLabel", false), false)) return ""
-    if (TupleStore.inCall) return TupleStore.sharing ? "Sharing" : (TupleStore.muted ? "Muted" : "In call")
-    return TupleStore.loggedIn ? "" : "Tuple"
-  }
+  readonly property string barText: Model.barText(barStyle, {
+    loggedIn: TupleStore.loggedIn, inCall: TupleStore.inCall, muted: TupleStore.muted,
+    sharing: TupleStore.sharing, participants: TupleStore.participants
+  })
 
   onSettingsChanged: TupleStore.callAlerts = Model.toBool(setting("callAlerts", true), true)
   Component.onCompleted: TupleStore.callAlerts = Model.toBool(setting("callAlerts", true), true)
@@ -191,7 +199,8 @@ Panel {
   }
 
   // One page at a time over the room and people lists: "" is the lists,
-  // "help" explains why sharing breaks the desktop. The call stays on top.
+  // "help" explains why sharing breaks the desktop, "settings" holds the
+  // widget's settings. The call stays on top.
   property string page: ""
   readonly property bool paged: page !== ""
 
@@ -233,7 +242,7 @@ Panel {
         TupleIcon {
           anchors.centerIn: parent
           iconSize: Style.bar.iconCanvas
-          color: root.ready ? root.barForeground : Qt.darker(root.barForeground, 1.55)
+          color: !root.ready ? Qt.darker(root.barForeground, 1.55) : (TupleStore.inCall ? root.accent : root.barForeground)
           badgeColor: root.urgent
           filled: TupleStore.inCall
           crossed: TupleStore.inCall && TupleStore.muted
@@ -249,15 +258,16 @@ Panel {
 
   KeyboardPanel {
     id: panel
+    objectName: "keyboardPanel"
     anchorItem: button
     owner: root
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(380))
+    contentWidth: panel.fittedContentWidth(Style.space(root.metrics.width))
     // Signed in, the panel keeps one height and its content scrolls, so
     // searching never resizes it. Setup and sign-in fit their few lines.
-    contentHeight: panel.fittedContentHeight(root.ready || root.paged ? Style.space(620) : column.implicitHeight, Style.space(620))
+    contentHeight: panel.fittedContentHeight(root.ready || root.paged ? Style.space(root.metrics.height) : column.implicitHeight, Style.space(root.metrics.height))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -277,7 +287,7 @@ Panel {
         else if (key === "s") root.shareFromPanel()
         else if (key === "l") TupleStore.leave()
         else if (key === "a" && root.ringing) TupleStore.accept()
-        else if (key === "/" && root.ready && !root.paged) searchField.forceActiveFocus()
+        else if (key === "/" && root.listsShown) searchField.forceActiveFocus()
       }
 
       // The panel itself does not scroll: each list scrolls on its own, and
@@ -605,11 +615,24 @@ Panel {
           }
 
           // -------------------------------------------------------- rooms
-          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.ready && !root.paged; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.listsShown; foreground: root.foreground }
+
+          // One field: typing filters rooms and people, a pasted link joins on Enter.
+          TextField {
+            id: searchField
+            visible: root.listsShown
+            Layout.fillWidth: true
+            Layout.minimumHeight: implicitHeight
+            onActiveFocusChanged: root.editorsFocused += activeFocus ? 1 : -1
+            foreground: root.foreground
+            placeholderText: "Search, or paste a link to join (/)"
+            onTextChanged: root.search = text
+            onAccepted: if (Model.isJoinableUrl(text) && TupleStore.joinUrl(text)) text = ""
+          }
 
           ColumnLayout {
             objectName: "roomsSection"
-            visible: root.ready && !root.paged
+            visible: root.listsShown && root.showRooms
             Layout.fillWidth: true
             // Layouts only resize fillHeight items; the room list's own
             // maximum stops this section from growing past it.
@@ -621,18 +644,6 @@ Panel {
               text: "ROOMS"
               foreground: root.foreground
               fontFamily: root.fontFamily
-            }
-
-            // One field: typing filters rooms and people, a pasted link joins on Enter.
-            TextField {
-              id: searchField
-              Layout.fillWidth: true
-              Layout.minimumHeight: implicitHeight
-              onActiveFocusChanged: root.editorsFocused += activeFocus ? 1 : -1
-              foreground: root.foreground
-              placeholderText: "Search, or paste a link to join (/)"
-              onTextChanged: root.search = text
-              onAccepted: if (Model.isJoinableUrl(text) && TupleStore.joinUrl(text)) text = ""
             }
 
             Text {
@@ -654,11 +665,11 @@ Panel {
           }
 
           // ------------------------------------------------------- people
-          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.ready && !root.paged; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; Layout.minimumHeight: implicitHeight; visible: root.listsShown && root.showRooms && root.showPeople; foreground: root.foreground }
 
           ColumnLayout {
             objectName: "peopleSection"
-            visible: root.ready && !root.paged
+            visible: root.listsShown && root.showPeople
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: Style.space(8)
@@ -729,7 +740,7 @@ Panel {
               PanelSectionHeader {
                 Layout.fillWidth: true
                 // XWAYLAND-SHARE-WORKAROUND: the help page's title.
-                text: root.page === "help" ? "WHY SHARING BREAKS X11 APPS" : ""
+                text: root.page === "help" ? "WHY SHARING BREAKS X11 APPS" : "SETTINGS"
                 foreground: root.foreground
                 fontFamily: root.fontFamily
               }
@@ -777,6 +788,75 @@ Panel {
                     foreground: root.foreground
                     fontFamily: root.fontFamily
                     onClicked: Qt.openUrlExternally("file://" + TupleStore.pluginDir + "/UPSTREAM.md")
+                  }
+                }
+
+                // Each choice is saved to this widget's shell.json entry at once.
+                Column {
+                  objectName: "settingsPage"
+                  visible: root.page === "settings"
+                  width: parent.width
+                  spacing: Style.space(10)
+
+                  PanelSectionHeader { text: "BAR"; foreground: root.foreground; fontFamily: root.fontFamily }
+
+                  ChoiceRow {
+                    objectName: "barStyleChoice"
+                    label: "Next to the icon"
+                    options: [{ value: "icon", label: "Nothing" }, { value: "status", label: "Status" }, { value: "who", label: "Who" }]
+                    value: root.barStyle
+                    onPicked: function(value) { root.persistSettings({ barStyle: value }) }
+                  }
+
+                  PanelSectionHeader { text: "PANEL"; foreground: root.foreground; fontFamily: root.fontFamily }
+
+                  ChoiceRow {
+                    objectName: "panelSizeChoice"
+                    label: "Size"
+                    options: [{ value: "compact", label: "Compact" }, { value: "normal", label: "Normal" }, { value: "tall", label: "Tall" }]
+                    value: root.setting("panelSize", "normal")
+                    onPicked: function(value) { root.persistSettings({ panelSize: value }) }
+                  }
+
+                  ChoiceRow {
+                    objectName: "accentChoice"
+                    label: "Highlight colour"
+                    options: [{ value: "theme", label: "Theme" }, { value: "foreground", label: "Text" }, { value: "urgent", label: "Alert" }]
+                    value: root.accentRole
+                    onPicked: function(value) { root.persistSettings({ accent: value }) }
+                  }
+
+                  SettingToggle {
+                    objectName: "showRoomsToggle"
+                    label: "Show rooms"
+                    checked: root.showRooms
+                    onClicked: root.persistSettings({ showRooms: !root.showRooms })
+                  }
+
+                  SettingToggle {
+                    objectName: "showPeopleToggle"
+                    label: "Show people"
+                    checked: root.showPeople
+                    onClicked: root.persistSettings({ showPeople: !root.showPeople })
+                  }
+
+                  PanelSectionHeader { text: "ALERTS"; foreground: root.foreground; fontFamily: root.fontFamily }
+
+                  SettingToggle {
+                    objectName: "callAlertsToggle"
+                    label: "Call notifications"
+                    description: "When a call starts or ends, and when someone joins or leaves"
+                    checked: TupleStore.callAlerts
+                    onClicked: root.persistSettings({ callAlerts: !TupleStore.callAlerts })
+                  }
+
+                  // XWAYLAND-SHARE-WORKAROUND: the warning's setting.
+                  SettingToggle {
+                    objectName: "warnBeforeSharingToggle"
+                    label: "Warn before sharing"
+                    description: "Sharing your screen crashes X11 apps"
+                    checked: root.warnBeforeSharing
+                    onClicked: root.persistSettings({ warnBeforeSharing: !root.warnBeforeSharing })
                   }
                 }
               }
@@ -828,6 +908,14 @@ Panel {
               }
 
               PanelActionButton {
+                iconText: "\u{f0493}"
+                tooltipText: "Settings"
+                foreground: root.page === "settings" ? root.accent : root.foreground
+                fontFamily: root.fontFamily
+                onClicked: root.togglePage("settings")
+              }
+
+              PanelActionButton {
                 iconText: "\u{f00e4}"
                 tooltipText: "Something wrong? Diagnose with my agent"
                 foreground: root.foreground
@@ -855,6 +943,42 @@ Panel {
 
   // Up to four and a half rows, so a cut-off row shows there is more to
   // scroll; the layout may squeeze it to one and a half to keep the footer.
+  component ChoiceRow: Column {
+    id: choice
+    property string label: ""
+    property alias options: group.options
+    property alias value: group.value
+    signal picked(string value)
+    width: parent ? parent.width : 0
+    spacing: Style.space(6)
+
+    Text {
+      text: choice.label
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+
+    ButtonGroup {
+      id: group
+      objectName: choice.objectName + "Group"
+      focusable: false
+      foreground: root.foreground
+      accent: root.accent
+      fontFamily: root.fontFamily
+      fontSize: Style.font.bodySmall
+      onChanged: function(value) { choice.picked(value) }
+    }
+  }
+
+  component SettingToggle: Toggle {
+    width: parent ? parent.width : 0
+    foreground: root.foreground
+    accent: root.accent
+    fontFamily: root.fontFamily
+    titleSize: Style.font.body
+  }
+
   component RoomList: ListView {
     id: list
     readonly property real pitch: count > 0 ? (contentHeight + spacing) / count : 0
@@ -862,7 +986,8 @@ Panel {
     Layout.fillWidth: true
     Layout.fillHeight: true
     Layout.preferredHeight: Layout.maximumHeight
-    Layout.maximumHeight: Math.min(contentHeight, pitch * 4.5 - spacing)
+    // With People hidden, rooms take the whole height.
+    Layout.maximumHeight: root.showPeople ? Math.min(contentHeight, pitch * 4.5 - spacing) : contentHeight
     Layout.minimumHeight: Math.min(contentHeight, pitch * 1.5 - spacing)
     clip: true
     spacing: Style.space(6)

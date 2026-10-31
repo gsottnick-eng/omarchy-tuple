@@ -313,6 +313,35 @@ function parseInstallEvent(line) {
   return { stage: event.stage, message: text(event.message), version: text(event.version), path: text(event.path) }
 }
 
+// ------------------------------------------------------------ appearance
+
+// The bar button: "icon" alone, "status" (In call, Muted, Sharing) or "who"
+// (the others in the call). Before barStyle existed, showLabel turned the
+// status text on, so an old setting still reads the same.
+function barStyle(settings) {
+  var style = settings ? settings.barStyle : undefined
+  if (style === "icon" || style === "status" || style === "who") return style
+  return toBool(settings ? settings.showLabel : undefined, false) ? "status" : "icon"
+}
+
+function barText(style, s) {
+  if (style === "icon") return ""
+  if (s.inCall) {
+    // First names: the bar has little room.
+    var names = toArray(s.participants).map(function(p) { return text(p.name).split(/\s+/)[0] }).filter(Boolean)
+    if (style === "who" && names.length > 0) return elide(names.join(", "), 24)
+    return s.sharing ? "Sharing" : (s.muted ? "Muted" : "In call")
+  }
+  return s.loggedIn ? "" : "Tuple"
+}
+
+// Panel size in Style.space units.
+function panelMetrics(size) {
+  if (size === "compact") return { width: 340, height: 480 }
+  if (size === "tall") return { width: 440, height: 760 }
+  return { width: 380, height: 620 }
+}
+
 function statusSummary(s) {
   if (!s.installed) return "Not installed"
   if (!s.daemonRunning) return "Stopped"
