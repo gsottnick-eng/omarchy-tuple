@@ -53,7 +53,7 @@ With the dropdown open:
 | `s` | Share or stop sharing your screen |
 | `l` | Leave the call |
 | `a` | Answer an incoming call |
-| Esc | Back from a page such as help, otherwise close |
+| Esc | Back from a page such as help, clear the search, otherwise close |
 
 Right-click the bar icon during a call to mute.
 

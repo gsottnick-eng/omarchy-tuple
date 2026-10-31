@@ -59,13 +59,23 @@ Singleton {
   property string status: ""
   property string error: ""
   property string calling: ""
+  // True from asking the daemon to start or join a call until it connects:
+  // while it holds, a not-yet-connected call is ours ringing out, never an
+  // incoming call to answer.
+  property bool outgoing: false
   property bool installing: false
   property string installMessage: ""
 
   readonly property bool busy: actionProcess.running || calling !== "" || installProcess.running
+  // "calling" while ours rings out, "ringing" for a call to answer, else "".
+  readonly property string callPhase: Model.callPhase({
+    inCall: inCall, connected: connected, connectedOnce: connectedOnce,
+    participants: participants, outgoing: outgoing
+  })
   readonly property string summary: Model.statusSummary({
     installed: installed, daemonRunning: daemonRunning, loggedIn: loggedIn,
-    inCall: inCall, muted: muted, sharing: sharing
+    inCall: inCall, muted: muted, sharing: sharing, connected: connected,
+    connectedOnce: connectedOnce, participants: participants, outgoing: outgoing
   })
   readonly property string pluginDir: {
     var dir = String(Qt.resolvedUrl("."))
@@ -166,6 +176,9 @@ Singleton {
     version = s.version
     updateVersion = s.updateVersion
     inCall = s.inCall
+    // Only a connection or the end of the call settles our ring out; an idle
+    // snapshot before the daemon reports the new call must not.
+    if (s.connected || (wasInCall && !s.inCall)) outgoing = false
     // Mid-call, tell the room who came and went — but only once the change
     // has held long enough not to be a network blip (see participantDebounce).
     // The call's own start and end are announced by onInCallChanged.
@@ -262,6 +275,7 @@ Singleton {
   function leave() {
     if (inCall || calling !== "") run(["call", "leave"], "Leaving the call…", true)
     calling = ""
+    outgoing = false
     callTimer.stop()
   }
 
@@ -277,6 +291,7 @@ Singleton {
     var call = Model.callRequest(person)
     if (call.error) { fail(call.error); return }
     calling = person.name
+    outgoing = true
     progress("Calling " + person.name + "…")
     callTimer.restart()
     api("POST", call.path, call.body, function(reply) {
@@ -284,6 +299,7 @@ Singleton {
       if (root.calling === "") return
       if (root._settled(reply)) return
       root.calling = ""
+      root.outgoing = false
       callTimer.stop()
     })
   }
@@ -304,8 +320,12 @@ Singleton {
 
   function join(target, label) {
     if (!_apiReady()) return
+    outgoing = true
+    callTimer.restart()
     progress(label)
-    api("POST", "/call/join", { url: target }, _settled)
+    api("POST", "/call/join", { url: target }, function(reply) {
+      if (!root._settled(reply)) root.outgoing = false
+    })
   }
 
   function favoritePerson(person) {
@@ -363,17 +383,19 @@ Singleton {
   // ----------------------------------------------------------------- sounds
 
   property bool stateSeen: false
-  // The call has connected at least once, so its end is worth a sound.
-  property bool _callConnected: false
+  // The call has connected at least once, so its end is worth a sound; and a
+  // snapshot where nobody reads connected is a network blip, not a call still
+  // waiting for someone to pick up.
+  property bool connectedOnce: false
 
   function callSounds(heard, wasInCall, wasMuted, s) {
-    if (s.inCall && s.connected && !_callConnected) {
-      _callConnected = true
+    if (s.inCall && s.connected && !connectedOnce) {
+      connectedOnce = true
       if (heard && soundCall) play("call-start")
     }
     if (wasInCall && !s.inCall) {
-      if (heard && soundCall && _callConnected) play("call-end")
-      _callConnected = false
+      if (heard && soundCall && connectedOnce) play("call-end")
+      connectedOnce = false
     }
     if (heard && soundMute && wasInCall && s.inCall && s.muted !== wasMuted) play(s.muted ? "mute" : "unmute")
   }
@@ -773,9 +795,13 @@ Singleton {
   Timer {
     id: callTimer
     interval: 60000
-    onTriggered: if (root.calling !== "" && !root.inCall) {
-      root.note(root.calling + " didn't pick up")
-      root.calling = ""
+    onTriggered: {
+      // Nothing came of the call or join, so a later ring is someone else's.
+      if (!root.inCall) root.outgoing = false
+      if (root.calling !== "" && !root.inCall) {
+        root.note(root.calling + " didn't pick up")
+        root.calling = ""
+      }
     }
   }
 

@@ -313,6 +313,16 @@ function parseInstallEvent(line) {
   return { stage: event.stage, message: text(event.message), version: text(event.version), path: text(event.path) }
 }
 
+// A call nobody has picked up yet: someone else is in it, but no one has
+// connected. Alone in a room is not ringing, and neither is a connected call
+// that blips. Our own ring out is "calling"; anything else is "ringing".
+function callPhase(s) {
+  // Callers that pass no connected state get the plain in-call wording.
+  if (!s.inCall || s.connected !== false || s.connectedOnce) return ""
+  if (toArray(s.participants).length === 0) return ""
+  return s.outgoing ? "calling" : "ringing"
+}
+
 // ------------------------------------------------------------ appearance
 
 // The bar button: "icon" alone, "status" (In call, Muted, Sharing) or "who"
@@ -327,6 +337,8 @@ function barStyle(settings) {
 function barText(style, s) {
   if (style === "icon") return ""
   if (s.inCall) {
+    var phase = callPhase(s)
+    if (phase !== "") return phase === "calling" ? "Calling" : "Ringing"
     // First names: the bar has little room.
     var names = toArray(s.participants).map(function(p) { return text(p.name).split(/\s+/)[0] }).filter(Boolean)
     if (style === "who" && names.length > 0) return elide(names.join(", "), 24)
@@ -346,6 +358,10 @@ function statusSummary(s) {
   if (!s.installed) return "Not installed"
   if (!s.daemonRunning) return "Stopped"
   if (!s.loggedIn) return "Signed out"
-  if (s.inCall) return s.sharing ? "Sharing" : (s.muted ? "In a call, muted" : "In a call")
+  if (s.inCall) {
+    var phase = callPhase(s)
+    if (phase !== "") return phase === "calling" ? "Calling" : "Ringing"
+    return s.sharing ? "Sharing" : (s.muted ? "In a call, muted" : "In a call")
+  }
   return "Ready"
 }

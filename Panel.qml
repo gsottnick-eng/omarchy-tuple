@@ -36,9 +36,13 @@ Panel {
   readonly property color selectedFill: Style.selectedFillFor(foreground, accent)
 
   readonly property bool ready: TupleStore.installed && TupleStore.loggedIn
-  // Unverified against a real incoming call: a call this side did not start
-  // that has not connected yet is treated as ringing.
-  readonly property bool ringing: TupleStore.inCall && !TupleStore.connected && TupleStore.calling === ""
+  // Unverified against a real incoming call: someone in a call this side did
+  // not start, before anyone has connected, is treated as ringing (see
+  // Model.callPhase). Our own ring out, a connected call that blips and a
+  // room we sit in alone never are. A call placed before the shell started is
+  // indistinguishable from an incoming one: the client says nothing about who
+  // placed it.
+  readonly property bool ringing: TupleStore.callPhase === "ringing" && TupleStore.calling === ""
   readonly property var rooms: ready && showRooms ? Model.visibleRooms(TupleStore.rooms, search) : []
   readonly property var people: ready && showPeople ? Model.visibleContacts(TupleStore.contacts, search) : []
   property string search: ""
@@ -53,7 +57,9 @@ Panel {
 
   readonly property string barText: Model.barText(barStyle, {
     loggedIn: TupleStore.loggedIn, inCall: TupleStore.inCall, muted: TupleStore.muted,
-    sharing: TupleStore.sharing, participants: TupleStore.participants
+    sharing: TupleStore.sharing, participants: TupleStore.participants,
+    connected: TupleStore.connected, connectedOnce: TupleStore.connectedOnce,
+    outgoing: TupleStore.outgoing
   })
 
   // Alerts and sounds belong to the one store, set from this widget's settings.
@@ -428,6 +434,7 @@ Panel {
               TextField {
                 id: codeField
                 onActiveFocusChanged: root.editorsFocused += activeFocus ? 1 : -1
+                Keys.onEscapePressed: keyCatcher.forceActiveFocus()
                 width: parent.width - finishButton.width - reopenButton.width - copyLinkButton.width - Style.space(18)
                 foreground: root.foreground
                 placeholderText: "Authorization code"
@@ -473,7 +480,8 @@ Panel {
             spacing: Style.space(8)
 
             PanelSectionHeader {
-              text: root.ringing ? "INCOMING CALL" : "CURRENT CALL"
+              text: root.ringing ? "INCOMING CALL"
+                : (TupleStore.callPhase === "calling" || TupleStore.calling !== "" ? "CALLING" : "CURRENT CALL")
               foreground: root.foreground
               fontFamily: root.fontFamily
             }
@@ -636,6 +644,11 @@ Panel {
             placeholderText: "Search, or paste a link to join (/)"
             onTextChanged: root.search = text
             onAccepted: if (Model.isJoinableUrl(text) && TupleStore.joinUrl(text)) text = ""
+            // Esc leaves the field and drops the filter; only then does Esc close.
+            Keys.onEscapePressed: {
+              text = ""
+              keyCatcher.forceActiveFocus()
+            }
           }
 
           ColumnLayout {

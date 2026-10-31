@@ -27,6 +27,7 @@ fail() { printf '{"error":"%s"}\n' "$1" >&2; exit 1; }
 state_snapshot() {
   if ! flag logged_in; then compact "$FIXTURES/state-signed-out.json"
   elif ! flag in_call; then compact "$FIXTURES/state-idle.json"
+  elif flag ringing; then sed -n 2p "$FIXTURES/state-follow-call.jsonl"
   elif flag guest; then compact "$FIXTURES/state-follow-call-guest.jsonl"
   elif flag muted && ! flag picker_cancelled; then sed -n 7p "$FIXTURES/state-follow-call.jsonl"
   else sed -n 8p "$FIXTURES/state-follow-call.jsonl"
