@@ -355,6 +355,17 @@ class PanelTest(unittest.TestCase):
         self.assertFalse(state["connected"])
         self.assertTrue(state["panel"]["ringing"])
 
+    def test_a_blip_on_a_connected_call_is_not_ringing(self):
+        # A snapshot where nobody reads connected can be a network blip in a
+        # call that already connected, not a call waiting to be answered. Once
+        # this call has connected, the panel never shows it as ringing again.
+        harness = self.harness(logged_in=True, in_call=True, flags=("ringing", "muted"))
+        harness.run(["wait:300", "unflag:ringing", "wait:600", "flag:ringing", "wait:600"])
+        self.assertTrue(harness.after(0)["panel"]["ringing"], "a call that never connected rings")
+        self.assertTrue(harness.after(2)["connected"], "dropping the flag connects the fixture call")
+        self.assertFalse(harness.after(4)["panel"]["ringing"], "a blip is not a new incoming call")
+        self.assertEqual(harness.after(4)["summary"], "In a call, muted")
+
     def test_a_busy_contact_in_a_joinable_call_is_joined_not_rung(self):
         harness = self.harness(logged_in=True)
         harness.run(["call:Katherine Johnson", "wait:1000"])

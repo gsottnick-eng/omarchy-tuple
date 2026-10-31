@@ -69,7 +69,8 @@ Singleton {
   readonly property bool busy: actionProcess.running || calling !== "" || installProcess.running
   readonly property string summary: Model.statusSummary({
     installed: installed, daemonRunning: daemonRunning, loggedIn: loggedIn,
-    inCall: inCall, muted: muted, sharing: sharing, connected: connected
+    inCall: inCall, muted: muted, sharing: sharing, connected: connected,
+    connectedOnce: connectedOnce
   })
   readonly property string pluginDir: {
     var dir = String(Qt.resolvedUrl("."))
@@ -374,17 +375,19 @@ Singleton {
   // ----------------------------------------------------------------- sounds
 
   property bool stateSeen: false
-  // The call has connected at least once, so its end is worth a sound.
-  property bool _callConnected: false
+  // The call has connected at least once, so its end is worth a sound; and a
+  // snapshot where nobody reads connected is a network blip, not a call still
+  // waiting for someone to pick up.
+  property bool connectedOnce: false
 
   function callSounds(heard, wasInCall, wasMuted, s) {
-    if (s.inCall && s.connected && !_callConnected) {
-      _callConnected = true
+    if (s.inCall && s.connected && !connectedOnce) {
+      connectedOnce = true
       if (heard && soundCall) play("call-start")
     }
     if (wasInCall && !s.inCall) {
-      if (heard && soundCall && _callConnected) play("call-end")
-      _callConnected = false
+      if (heard && soundCall && connectedOnce) play("call-end")
+      connectedOnce = false
     }
     if (heard && soundMute && wasInCall && s.inCall && s.muted !== wasMuted) play(s.muted ? "mute" : "unmute")
   }

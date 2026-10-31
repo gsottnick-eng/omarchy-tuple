@@ -327,8 +327,9 @@ function barStyle(settings) {
 function barText(style, s) {
   if (style === "icon") return ""
   if (s.inCall) {
-    // Not connected yet: still waiting for someone to pick up or join.
-    if (s.connected === false) return "Ringing"
+    // Not connected yet and never has been: still waiting for someone to
+    // pick up or join. A call that connected and blipped keeps its old text.
+    if (s.connected === false && !s.connectedOnce) return "Ringing"
     // First names: the bar has little room.
     var names = toArray(s.participants).map(function(p) { return text(p.name).split(/\s+/)[0] }).filter(Boolean)
     if (style === "who" && names.length > 0) return elide(names.join(", "), 24)
@@ -349,7 +350,9 @@ function statusSummary(s) {
   if (!s.daemonRunning) return "Stopped"
   if (!s.loggedIn) return "Signed out"
   if (s.inCall) {
-    if (s.connected === false) return "Ringing"
+    // A blip on a connected call keeps the old wording; only a call that has
+    // never connected reads as ringing.
+    if (s.connected === false && !s.connectedOnce) return "Ringing"
     return s.sharing ? "Sharing" : (s.muted ? "In a call, muted" : "In a call")
   }
   return "Ready"
