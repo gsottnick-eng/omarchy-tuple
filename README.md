@@ -6,6 +6,14 @@ rooms, your people, and call controls, one click from the bar.
 
 ![Omatuple: the dropdown in a call, and its settings](preview.png)
 
+> [!WARNING]
+> **Sharing your screen crashes Xwayland**, a bug in Tuple's Linux client and
+> Xwayland, not Omatuple. Every X11 app you have open closes (Steam, Zoom,
+> games), and they won't start again until you log out of your desktop and back
+> in; signing out of Tuple doesn't help. Calls work, and so does watching
+> someone else's screen until you share. Omatuple warns you before each share.
+> Details in [Known issues](#known-issues).
+
 ## Features
 
 - **Rooms**: one scrolling list with your room first, then favorites A to Z,
@@ -155,7 +163,7 @@ omarchy plugin remove io.github.gsottnick.omatuple
 
 That removes the widget and its settings. The Tuple client stays, since you
 may still want it in a terminal, and its background daemon keeps running until
-you log out; `tuple stop` stops it now. To remove the client too:
+you log out of your desktop; `tuple stop` stops it now. To remove the client too:
 
 ```bash
 tuple stop
@@ -171,13 +179,13 @@ list, who has to fix each one, and what we're waiting on. The big ones:
 - **Starting a screen share crashes Xwayland**, closing every X11 app you have
   open (Steam, Zoom, games). It happened every time in testing, the moment
   Tuple's client started the share. Hyprland does not restart Xwayland, so X11
-  apps hang until you log out and back in. Omatuple warns you before each share
-  (you can turn that off), and refuses to share again after a crash until you
-  log back in. Seen with Tuple v2026_10_23.0 and Xwayland 24.1.14.
+  apps hang until you log out of your desktop and back in (signing out of Tuple
+  doesn't help). Omatuple warns you before each share (you can turn that off),
+  and refuses to share again after a crash until you log back in to the desktop. Seen with Tuple v2026_10_23.0 and Xwayland 24.1.14.
 - **After you share your own screen, you can't watch anyone else's until you
-  log out and back in.** Tuple's viewer window is an X11 app, and sharing has
-  crashed Xwayland. Viewing works fine before you share. Logging out closes
-  your open apps, so share when that's acceptable.
+  log out of your desktop and back in.** Tuple's viewer window is an X11 app, and
+  sharing has crashed Xwayland. Viewing works fine before you share. Logging out
+  of the desktop closes your open apps, so share when that's acceptable.
 - **Screen sharing needs the client's `capture` setting on `auto`**, Tuple's
   default. The `x11` setting fails under Hyprland with
   `X11GetImage failed with UnexpectedX11Event`. If you changed it, set it back:
