@@ -4,7 +4,7 @@ Tuple, the pair-programming app, in the Omarchy bar. Omatuple installs Tuple's
 Linux client for you and gives it the dropdown it doesn't ship with: your
 rooms, your people, and call controls, one click from the bar.
 
-![The Omatuple dropdown](preview.png)
+![Omatuple: the dropdown in a call, and its settings](preview.png)
 
 ## Features
 

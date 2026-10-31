@@ -20,6 +20,7 @@ Diagnosing a user's problem? Start with `agents/diagnose/SKILL.md`.
 | `bin/tuple-install` | Downloads Tuple, verifies its SHA-256, installs it |
 | `bin/tuple-notify` | Shows call alerts, read from stdin, over D-Bus |
 | `agents/diagnose/SKILL.md` | How a user's agent diagnoses and reports problems |
+| `tools/preview/` | Rebuilds `preview.png`, the marketplace and README picture, from the fake client |
 
 ## Rules every change keeps
 

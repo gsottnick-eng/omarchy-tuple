@@ -25,7 +25,7 @@ REPO = HERE.parent.parent
 sys.path.insert(0, str(HERE))
 
 from PySide6.QtCore import Q_ARG, QMetaObject, QObject, Qt, QTimer, QUrl  # noqa: E402
-from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter  # noqa: E402
+from PySide6.QtGui import QBitmap, QColor, QGuiApplication, QImage, QPainter, QRegion  # noqa: E402
 from PySide6.QtQml import QJSValue, QQmlApplicationEngine, QQmlEngine, QQmlExpression  # noqa: E402
 
 from qsmock import core, io, wayland  # noqa: E402,F401  (import registers the QML types)
@@ -260,6 +260,7 @@ def main() -> int:
         "--settings", default="{}", help="inline widget settings as JSON"
     )
     parser.add_argument("--shot", help="write a PNG of the rendered bar and panel")
+    parser.add_argument("--panel-shot", help="write a PNG of the dropdown alone")
     parser.add_argument("--dump", help="write observed state as JSON")
     parser.add_argument("--open", dest="open_panel", action="store_true", default=True)
     parser.add_argument("--closed", dest="open_panel", action="store_false")
@@ -335,6 +336,14 @@ def main() -> int:
             if args.shot:
                 Path(args.shot).parent.mkdir(parents=True, exist_ok=True)
                 compose(args.background).save(args.shot)
+            if args.panel_shot:
+                # The dropdown draws inside a transparent full-screen window,
+                # the tallest one: keep only its opaque part.
+                window = max((w for w in QGuiApplication.topLevelWindows() if w.isVisible()),
+                             key=lambda w: w.height())
+                grab = window.grabWindow()
+                box = QRegion(QBitmap.fromImage(grab.createAlphaMask())).boundingRect()
+                grab.copy(box).save(args.panel_shot)
         except Exception as error:  # a broken capture must not hang the run
             import traceback
 
