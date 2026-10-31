@@ -15,8 +15,8 @@ jobs:
     name: Node tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: node --test 'tests/*.test.mjs'
@@ -41,7 +41,7 @@ jobs:
             libegl1 libgl1 libglib2.0-0 libxkbcommon0 libfontconfig1 libdbus-1-3 fonts-dejavu-core \
             dbus python3-gi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Fetch Omarchy's shell components
         run: git clone --depth 1 --branch "$OMARCHY_REF" https://github.com/basecamp/omarchy.git "$RUNNER_TEMP/omarchy"
