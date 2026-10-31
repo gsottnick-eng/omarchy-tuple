@@ -148,7 +148,9 @@ function parseRooms(raw) {
   var list = typeof raw === "string" ? parseJson(raw) : raw
   var out = []
   toArray(list).forEach(function(r) {
-    if (!r || !r.slug) return
+    // The client puts the slug into a request path unescaped, so anything but
+    // the plain shape Tuple uses could reach another endpoint.
+    if (!r || !/^[A-Za-z0-9_-]+$/.test(text(r.slug))) return
     var personal = r.kind === "personal"
     var occupants = toArray(r.members).map(function(m) {
       return { id: m.id, name: text(m.full_name) || text(m.email), email: text(m.email) }

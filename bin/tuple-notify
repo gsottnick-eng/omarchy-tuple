@@ -1,0 +1,34 @@
+#!/usr/bin/python3
+# Shows Omatuple's call alerts. Each line on stdin is one alert as JSON:
+# {"icon": ..., "summary": ..., "body": ...}. Alerts name the people in a call,
+# so they arrive on stdin, never as arguments other local users could read.
+#
+# The system Python, not whatever python3 is first on PATH: python-gobject is
+# part of every Omarchy install, and only the system Python has it.
+import json
+import sys
+
+from gi.repository import Gio, GLib
+
+bus = Gio.bus_get_sync(Gio.BusType.SESSION)
+for line in sys.stdin:
+    try:
+        alert = json.loads(line)
+        bus.call_sync(
+            "org.freedesktop.Notifications",
+            "/org/freedesktop/Notifications",
+            "org.freedesktop.Notifications",
+            "Notify",
+            GLib.Variant(
+                "(susssasa{sv}i)",
+                ("Tuple", 0, str(alert.get("icon", "")), str(alert.get("summary", "")),
+                 str(alert.get("body", "")), [], {}, -1),
+            ),
+            None,
+            Gio.DBusCallFlags.NONE,
+            -1,
+            None,
+        )
+    except (ValueError, AttributeError, GLib.Error) as error:
+        # The error type only: a message could quote the alert text.
+        print(f"tuple-notify: {type(error).__name__}", file=sys.stderr)

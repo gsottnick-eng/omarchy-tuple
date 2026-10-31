@@ -8,7 +8,7 @@ import test from "node:test"
 import { fileURLToPath } from "node:url"
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..")
-const shipped = ["Panel.qml", "TupleStore.qml", "Model.js", "TupleIcon.qml", "qmldir", "manifest.json", "bin/tuple-install"]
+const shipped = ["Panel.qml", "TupleStore.qml", "Model.js", "TupleIcon.qml", "qmldir", "manifest.json", "bin/tuple-install", "bin/tuple-notify"]
 
 const forbidden = [
   [/\/home\/[^/\s"']+/, "a home directory"],

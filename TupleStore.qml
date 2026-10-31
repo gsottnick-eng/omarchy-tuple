@@ -266,13 +266,13 @@ Singleton {
     calling = person.name
     progress("Calling " + person.name + "…")
     callProcess.command = command(person.joinable
-      ? ["call", "join", person.email]
-      : ["call", "start", person.email])
+      ? ["call", "join", "--", person.email]
+      : ["call", "start", "--", person.email])
     callProcess.running = true
   }
 
   function joinRoom(room) {
-    if (room) run(["rooms", "join", room.slug], "Joining " + room.name + "…")
+    if (room) run(["rooms", "join", "--", room.slug], "Joining " + room.name + "…")
   }
 
   function joinUrl(url) {
@@ -281,22 +281,33 @@ Singleton {
       fail("Paste a full https:// call or room link.")
       return false
     }
-    run(["call", "join", value], "Joining…")
+    run(["call", "join", "--", value], "Joining…")
     return true
   }
 
   function favoritePerson(person) {
-    if (person) run(["contacts", person.favorite ? "unfavorite" : "favorite", person.email], "")
+    if (person) run(["contacts", person.favorite ? "unfavorite" : "favorite", "--", person.email], "")
   }
 
   function favoriteRoom(room) {
-    if (room) run(["rooms", room.favorite ? "unfavorite" : "favorite", room.slug], "")
+    if (room) run(["rooms", room.favorite ? "unfavorite" : "favorite", "--", room.slug], "")
   }
 
+  // Links can be private (a sign-in link, a room link), so wl-copy reads them
+  // on stdin: every local user can read a process's command line.
+  property string _clip: ""
   function copy(value) {
     if (!value) return
-    Quickshell.execDetached(["wl-copy", "--", String(value)])
+    _clip = String(value)
+    if (!clipboard.running) { clipboard.stdinEnabled = true; clipboard.running = true }
     note("Copied")
+  }
+
+  // Alerts name the people in a call, so they reach the notifier on stdin too.
+  property var _alerts: []
+  function alert(icon, summary, body) {
+    _alerts.push(JSON.stringify({ icon: icon, summary: summary, body: body || "" }))
+    if (!notifier.running) { notifier.stdinEnabled = true; notifier.running = true }
   }
 
   // ---------------------------------------------------------------- sign in
@@ -367,11 +378,12 @@ Singleton {
 
   // Hands the problem to the user's default coding agent the way
   // `omarchy agent crash` does: the facts here, the method in the skill file.
+  // The prompt is a command-line argument, so it carries no error text: errors
+  // can name people or rooms. The agent asks the user what the panel showed.
   function diagnose() {
     if (diagnoseProcess.running) return
     var prompt = "Omatuple, the Tuple bar widget for Omarchy, is misbehaving and I want to know why.\n\n"
       + "  status:     " + summary + "\n"
-      + "  last error: " + (error || "none") + "\n"
       + "  tuple:      " + (binaryPath || "not found") + " " + version + "\n"
       + "  plugin:     " + pluginDir + "\n\n"
       + "Follow the skill at " + pluginDir + "/agents/diagnose/SKILL.md. "
@@ -444,10 +456,10 @@ Singleton {
       pending.forEach(function(p) { now[p.id] = true })
       if (root.callAlerts && root.probed) {
         pending.forEach(function(p) {
-          if (!announced[p.id]) Quickshell.execDetached(["notify-send", "-a", "Tuple", "-i", "call-start", p.name + " joined the call", ""])
+          if (!announced[p.id]) root.alert("call-start", p.name + " joined the call")
         })
         root.announcedParticipants.forEach(function(p) {
-          if (!now[p.id]) Quickshell.execDetached(["notify-send", "-a", "Tuple", "-i", "call-stop", p.name + " left the call", ""])
+          if (!now[p.id]) root.alert("call-stop", p.name + " left the call")
         })
       }
       root.announcedParticipants = pending
@@ -463,8 +475,7 @@ Singleton {
       sharing = false
     }
     if (callAlerts && probed) {
-      Quickshell.execDetached(["notify-send", "-a", "Tuple", "-i", "call-start",
-        inCall ? "Call started" : "Call ended", inCall ? summary : ""])
+      alert("call-start", inCall ? "Call started" : "Call ended", inCall ? summary : "")
     }
   }
 
@@ -647,6 +658,31 @@ Singleton {
         root.fail(Model.errorMessage(String(loginErr.text || "") || root._loginText) || "Sign in did not start")
       }
     }
+  }
+
+  Process {
+    id: clipboard
+    command: ["wl-copy"]
+    onStarted: {
+      write(root._clip)
+      root._clip = ""
+      stdinEnabled = false
+    }
+    // Copied again while wl-copy was still reading: copy the newer value.
+    onExited: if (root._clip !== "") { stdinEnabled = true; running = true }
+  }
+
+  Process {
+    id: notifier
+    command: [root.pluginDir + "/bin/tuple-notify"]
+    onStarted: {
+      var lines = root._alerts
+      root._alerts = []
+      lines.forEach(function(line) { write(line + "\n") })
+      // End of input: the notifier shows these and exits.
+      stdinEnabled = false
+    }
+    onExited: if (root._alerts.length > 0) { stdinEnabled = true; running = true }
   }
 
   Process {

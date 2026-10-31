@@ -136,6 +136,19 @@ class Harness:
         shutil.rmtree(self.runtime, ignore_errors=True)
 
 
+def alerts(snapshot):
+    """The text of every call alert the plugin raised."""
+    return " ".join(
+        p["stdin"] for p in snapshot["piped"] if p["command"][0].endswith("/bin/tuple-notify")
+    )
+
+
+def command_lines(snapshot):
+    """Every command line the plugin ran or detached, as one string."""
+    commands = snapshot["detached"] + [p["command"] for p in snapshot["piped"]]
+    return " ".join(" ".join(c) for c in commands)
+
+
 class PanelTest(unittest.TestCase):
     maxDiff = None
 
@@ -250,39 +263,45 @@ class PanelTest(unittest.TestCase):
             ["wait:200", "flag:guest", "wait:3500", "unflag:guest", "wait:3500"]
         )
 
-        def alerts(snapshot):
-            return " ".join(" ".join(cmd) for cmd in snapshot["detached"])
-
         joined, left = harness.after(2), harness.after(4)
         self.assertIn("Grace Hopper joined the call", alerts(joined))
         self.assertIn("Grace Hopper left the call", alerts(left))
         self.assertNotIn("Katherine Johnson", alerts(harness.final))
+        # Names reach the notifier on stdin, never on a command line.
+        self.assertNotIn("Grace Hopper", command_lines(harness.final))
 
     def test_a_brief_disconnect_announces_nothing(self):
         # A network blip flips `connected` away and back within the debounce
         # window, so neither a leave nor a join is announced.
         harness = self.harness(logged_in=True, in_call=True, flags=("muted",))
         harness.run(["wait:200", "flag:guest", "wait:500", "unflag:guest", "wait:3500"])
-        alerts = " ".join(" ".join(cmd) for cmd in harness.final["detached"])
-        self.assertNotIn("Grace Hopper joined the call", alerts)
-        self.assertNotIn("Grace Hopper left the call", alerts)
+        self.assertNotIn("Grace Hopper joined the call", alerts(harness.final))
+        self.assertNotIn("Grace Hopper left the call", alerts(harness.final))
+
+    def test_a_copied_link_goes_to_the_clipboard_on_stdin(self):
+        harness = self.harness(logged_in=True)
+        link = "https://tuple.example/r/private-room"
+        harness.run(["copy:" + link, "wait:200"])
+        copies = [p for p in harness.final["piped"] if p["command"] == ["wl-copy"]]
+        self.assertEqual([p["stdin"] for p in copies], [link])
+        self.assertNotIn(link, command_lines(harness.final))
 
     def test_calling_someone_uses_their_email_and_the_call_shows_up(self):
         harness = self.harness(logged_in=True)
         state = harness.run(["call:Grace Hopper", "wait:1200"])
-        self.assertIn("call start grace@example.com", harness.argv())
+        self.assertIn("call start -- grace@example.com", harness.argv())
         self.assertTrue(state["inCall"])
         self.assertEqual(state["calling"], "")
 
     def test_a_busy_contact_in_a_joinable_call_is_joined_not_rung(self):
         harness = self.harness(logged_in=True)
         harness.run(["call:Katherine Johnson", "wait:1000"])
-        self.assertIn("call join katherine@example.com", harness.argv())
+        self.assertIn("call join -- katherine@example.com", harness.argv())
 
     def test_joining_a_room_uses_its_slug(self):
         harness = self.harness(logged_in=True)
         state = harness.run(["join:room-16", "wait:1000"])
-        self.assertIn("rooms join room-16", harness.argv())
+        self.assertIn("rooms join -- room-16", harness.argv())
         self.assertTrue(state["inCall"])
 
     def test_a_pasted_link_must_be_https(self):
@@ -429,8 +448,10 @@ class PanelTest(unittest.TestCase):
 
     def test_diagnose_hands_the_agent_the_facts_and_the_skill(self):
         harness = self.harness(logged_in=True)
-        harness.run(["diagnose", "wait:500"])
+        harness.run(["join-url:http://not-https", "diagnose", "wait:500"])
         prompt = (harness.state / "agent-prompt").read_text()
+        # The prompt is a command line; errors can name people, so none goes in.
+        self.assertNotIn("Paste a full", prompt)
         self.assertIn("status:     Ready", prompt)
         self.assertIn("/agents/diagnose/SKILL.md", prompt)
         self.assertTrue(
@@ -440,6 +461,37 @@ class PanelTest(unittest.TestCase):
             "Ada", prompt, "the account's identity stays out of the prompt"
         )
 
+
+
+def has_system_gi() -> bool:
+    check = ["/usr/bin/python3", "-c", "from gi.repository import Gio"]
+    return Path(check[0]).exists() and subprocess.run(check, capture_output=True).returncode == 0
+
+
+@unittest.skipUnless(shutil.which("dbus-run-session") and has_system_gi(),
+                     "needs dbus-run-session and the system Python's gi")
+class NotifierTest(unittest.TestCase):
+    """bin/tuple-notify, against a notification server on a private bus."""
+
+    def test_each_line_becomes_one_notification_and_bad_lines_are_skipped(self):
+        lines = [
+            {"icon": "call-start", "summary": "Grace Hopper joined the call", "body": ""},
+            "not json",
+            {"icon": "call-stop", "summary": "Call ended"},
+        ]
+        result = subprocess.run(
+            ["dbus-run-session", "--", "/usr/bin/python3",
+             str(FAKE_CLIENT_DIR / "fake_notifications.py"),
+             str(HERE.parent / "bin" / "tuple-notify")],
+            input="".join((json.dumps(l) if isinstance(l, dict) else l) + "\n" for l in lines),
+            capture_output=True, text=True, timeout=30,
+        )
+        received = [json.loads(line) for line in result.stdout.splitlines()]
+        self.assertEqual(received, [
+            {"app": "Tuple", "icon": "call-start", "summary": "Grace Hopper joined the call", "body": ""},
+            {"app": "Tuple", "icon": "call-stop", "summary": "Call ended", "body": ""},
+        ], result.stderr)
+        self.assertNotIn("not json", result.stderr, "errors never quote the alert")
 
 if __name__ == "__main__":
     unittest.main()

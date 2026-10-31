@@ -214,3 +214,14 @@ test("hyprland epoch and xwayland crash parsing", () => {
   assert.equal(Model.xwaylandDead(""), false)
   assert.ok(Model.xwaylandDead("Mon Jan  1 00:00:00 2026 12345 1000 1000 11 SIGSEGV /usr/bin/Xwayland"))
 })
+
+test("a room whose slug could reach another client endpoint is dropped", () => {
+  const rooms = Model.parseRooms([
+    { slug: "aB3dEf", name: "Plain" },
+    { slug: "room-16", name: "Hyphen" },
+    { slug: "../call/1/accept", name: "Path" },
+    { slug: "a?b", name: "Query" },
+    { slug: "--format", name: "Option-like but harmless after --" },
+  ])
+  assert.deepEqual(rooms.map((r) => r.slug).sort(), ["--format", "aB3dEf", "room-16"])
+})
